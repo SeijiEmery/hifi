@@ -123,17 +123,12 @@ class XmlClassFileScanner:
 
 		info = {}
 		if api_exposed_methods or qt_public_slots or qt_properties:
-			print("Exposed class: %s"%name)
 			if api_exposed_methods:
-				print("SCRIPT_API:   " + ', '.join([ name for name, _ in api_exposed_methods]))
-				info['exposed_methods'] = api_exposed_methods
+				info['exposed_methods']    = api_exposed_methods
 			if qt_public_slots:
-				print("public slots: " + ', '.join([ slot for slot, _ in qt_public_slots]))
-				info['exposed_slots'] = qt_public_slots
+				info['exposed_slots']      = qt_public_slots
 			if qt_properties:
-				print("properties:   " + ', '.join([ name for name, _ in qt_properties]))
 				info['exposed_properties'] = qt_properties
-			print('')
 			self.results += [(name, info)]
 
 	def scanNamespace(self, node):
@@ -194,6 +189,17 @@ if __name__ == '__main__':
 
 	scanner = ScriptApiScanner('docs/xml')
 	results = scanner.scanAllFiles()
+
+	for name, info in results:
+		print("Exposed class: %s"%name)
+		if 'exposed_methods' in info:
+			print("SCRIPT_API:   " + ', '.join([ name for name, _ in info['exposed_methods']]))
+		if 'exposed_slots' in info:
+			print("public slots: " + ', '.join([ slot for slot, _ in info['exposed_slots']]))
+		if 'exposed_properties' in info:
+			print("properites:   " + ', '.join([ name for name, _ in infor['exposed_properites']]))
+		print('')
+
 
 	num_api_methods = sum([ len(info['exposed_methods']) for name, info in results if 'exposed_methods' in info ])
 	num_qt_slots    = sum([ len(info['exposed_slots'])   for name, info in results if 'exposed_slots' in info ])
