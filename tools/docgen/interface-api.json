@@ -1,0 +1,17 @@
+{
+	"global-objects": [
+		{ 	
+			"js": "Entities", 	
+			"cpp": "EntityScriptingInterface",
+			"src": "libraries/entities/src/EntityScriptingInterface.h"
+		},
+		{
+			"js": "Vec3",
+			"cpp": "Vec3",
+			"src": "libraries/script-engine/Vec3.h"
+		}
+	],
+	"exposed-objects": [
+	
+	],
+}
