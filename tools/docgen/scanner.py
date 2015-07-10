@@ -2,6 +2,7 @@
 import os.path
 from multiprocessing import Pool
 from xml.etree import ElementTree
+import re
 
 '''
 Need to get list of:
@@ -20,7 +21,7 @@ Need to get list of:
 
 '''
 
-
+STRIP_CONST_REF = True
 
 
 def gettext(node):
@@ -147,13 +148,13 @@ class ScriptApiScanner:
 
 	def reloadIndex (self):
 		file_ = os.path.join(self.xmlpath, "index.xml")
-		index = ElementTree.parse(file_).getroot()
+		self.index = ElementTree.parse(file_).getroot()
 
 		scannableItems = [ 'class', 'struct', 'namespace', 'var', 'function' ]
 		self.classFiles = set([])
 
 		# Scan entries
-		for node in index.iter('compound'):
+		for node in self.index.iter('compound'):
 			kind = node.attrib['kind']
 			if kind in scannableItems:
 				self.classFiles.add(os.path.join(self.xmlpath, node.attrib['refid'] + '.xml'))
@@ -173,9 +174,148 @@ class ScriptApiScanner:
 		return results_
 
 
-if __name__ == '__main__':
-	os.chdir('../../')	# Navigate to root hifi directory
+	def getNameOfNode(self, node, tag = 'name', assignToNode = False):
+		if tag in node.__dict__:
+			return node.__dict__[tag]
+		name = [ ''.join(elem.itertext()) for elem in node.iter(tag) ][0]
+		if assignToNode:
+			node.__dict__[tag] = name
+		return name
 
+	def _getInnerText(self, node):
+		if type(node) == str:
+			return node
+		if node.tag == 'para':
+			return '\n' + node.tag + ''.join(map(self.getInnerText, node))
+		if node.tag == 'ref':
+			return node.text + ''.join(map(self.getInnerText, node))
+		if node.text:
+			return node.text + ''.join(map(self.getInnerText, node))
+		return ''.join(map(self.getInnerText, node))
+
+	def getInnerText(self, node):
+		return self._getInnerText(node).strip()
+
+	def getClassIndex(self, name):
+		if not 'index' in self.__dict__ or self.index is None:
+			self.reloadIndex()
+		classTypes = set(['class', 'struct'])
+		for node in self.index.iter('compound'):
+			if node.attrib['kind'] in classTypes and self.getNameOfNode(node, assignToNode=True):
+				return node
+		return None
+
+	def loadClassXml(self, classIndex):
+		file_ = os.path.join(self.xmlpath, classIndex.attrib['refid'] + '.xml')
+		root = ElementTree.parse(file_).getroot()
+
+		classnode = [ node for node in root.iter('compounddef') if node.attrib['id'] == classIndex.attrib['refid']][0]
+		assert(classnode.attrib['kind'] == 'class')
+		assert(classnode.attrib['language'] == 'C++')
+		return classnode
+
+	def scanExposedClass(self, scriptedclass):
+		index  = self.getClassIndex(scriptedclass)
+		class_ = self.loadClassXml(index)
+
+		members = self.scanMembers(class_)
+
+		# print('\nScanned class %s.'%(scriptedclass))
+		# for category, memberlist in members.iteritems():
+		# 	if len(memberlist) != 0:
+		# 		print('%s: '%(category))
+		# 		for member in memberlist:
+		# 			print('\t%s'%(self.getNameOfNode(member, 'definition')))
+
+
+		# print(members)
+
+	''' Defines what the contents of doxygen member sections are tagged as. 
+	Used by getSectionLookupTable and scanScriptableMembers.
+	'''
+	method_section_categories = [
+		('exposed_methods', 	[]),
+		('exposed_attribs', 	[]),
+		('exposed_signals', 	['signal']),
+		('exposed_slots', 		['public-slot']),
+		('exposed_properties', 	['property']),
+		('non_exposed_methods', [
+			'func', 'public-func', 'private-func', 'protected-func', 'package-func',
+			'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func']),
+		('non_exposed_attribs', [
+			'var', 'public-attrib', 'private-attrib', 'protected-attrib', 'package-attrib',
+			'public-static-attrib', 'private-static-attrib', 'protected-static-attrib', 'package-static-attrib']),
+		('non_exposed_slots', 	['private-slot', 'protected-slot']),
+		('non_exposed_properties', []),
+		('unused', [
+			'user-defined', 'typedef', 'public-type', 'private-type', 'package-type', 'protected-type',
+			'dcop-func', 'event', 'friend', 'related', 'define', 'prototype', 'enum'])
+	]
+	def getSectionLookupTable(self):
+		''' Generates and caches a fast lookup table to categorize doxygen xml nodes based on attrib['kind'].
+		Used by scanScriptableMembers; the result is generated from method_section_categories.
+		'''
+		if not 'method_section_lookup' in self.__dict__:
+			self.method_section_lookup = {}
+			for category, kinds in self.method_section_categories:
+				self.method_section_lookup.update(dict([ (kind, category) for kind in kinds ]))
+		return self.method_section_lookup
+
+	def scanMembers(self, classNode):
+		members = dict([ (category, []) for category, _ in self.method_section_categories ])
+		lookup  = self.getSectionLookupTable()
+
+		for section in classNode.iter('sectiondef'):
+			print('section %s: '%(section.attrib['kind']) + ', '.join([ self.getNameOfNode(member) for member in section.iter('memberdef') ]))
+
+			members[lookup[section.attrib['kind']]] += [ member for member in section.iter('memberdef') ]
+
+		members['exposed_methods']     = map(self.parseMethod, members['exposed_methods'])
+		members['non_exposed_methods'] = map(self.parseMethod, members['non_exposed_methods'])
+
+		return members
+
+	def toJsType(self, type_, stripConstRef = False):
+		type_ = re.sub(r'(Q_INVOKABLE|SCRIPT_API)', r'\1', type_)
+		if STRIP_CONST_REF or stripConstRef:
+			type_ = re.sub(r'const\s+(.+)\s*&', r'\1', type_)
+			type_ = re.sub(r'const\s+(.+)', r'\1', type_)
+		return type_.strip()
+
+	def parseMethod(self, methodnode):
+		methodInfo = {}
+		methodInfo['name'] = self.getNameOfNode(methodnode)
+
+		rtype  = map(self.getInnerText, methodnode.iter('type'))
+		rtype  = rtype[0] if rtype else None
+		params = [ dict([ (elem.tag, self.getInnerText(elem)) for elem in param ]) for param in methodnode.iter('param') ]
+		methodInfo['cpptype'] = (rtype, params)
+
+		js_rtype = self.toJsType(rtype) if rtype else None
+		js_params = []
+		for param in params:
+			param = param.copy()
+			if 'type' in param:
+				param['type'] = self.toJsType(param['type'])
+			js_params += [param]
+		methodInfo['jstype'] = (js_rtype, js_params)
+
+		methodInfo['attribs'] = methodnode.attrib
+		methodInfo['references'] = [ ref.attrib for ref in methodnode.iter('references')]
+		methodInfo['referencedby'] = [ ref.attrib for ref in methodnode.iter('referencedby')]
+
+		brief = map(self.getInnerText, methodnode.iter('briefdescription'))
+		methodInfo['brief'] = brief[0] if brief and brief[0] else None
+
+		details = map(self.getInnerText, methodnode.iter('detaileddescription'))
+		methodInfo['details'] = details[0] if details and details[0] else None
+
+		print('{\n\t' + '\n\t'.join([ '%s: %s'%(k, v) for k, v in methodInfo.iteritems() ]) + '\n}')
+
+		return methodInfo
+
+
+def autobuild ():
 	if not os.path.isfile('docs/config.txt'):
 		print('Missing doxygen config file')
 		system.exit(-1)
@@ -186,6 +326,10 @@ if __name__ == '__main__':
 		print('Generated docs in <hifi dir>/docs')
 
 	assert(os.path.isfile('docs/xml/index.xml'))
+
+if __name__ == '__main__':
+	os.chdir('../../')	# Navigate to root hifi directory
+	autobuild()
 
 	scanner = ScriptApiScanner('docs/xml')
 	results = scanner.scanAllFiles()
@@ -235,4 +379,7 @@ if __name__ == '__main__':
 	print("Results: ")
 	print("    %d exposed classes (%d tagged, %d untagged)"%(len(results), num_tagged_classes, num_untagged_classes))
 	print("    %d exposed methods (%d tagged, %d untagged)"%(num_qt_props + num_qt_slots, num_api_methods, untagged_methods))
+
+
+	scanner.scanExposedClass('EntityScriptingInterface')
 

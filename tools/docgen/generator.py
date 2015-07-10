@@ -1,12 +1,26 @@
 
 import os.path
-from scanner import ScriptApiScanner
+from scanner import ScriptApiScanner, autobuild
+# from itertools import filterfalse, tee
 import json
 import re
+
 
 ''' Config '''
 STRIP_CONST_REF = True
 
+
+# Utility functions
+
+# #https://docs.python.org/dev/library/itertools.html#itertools-recipes
+# def partition(pred, iterable):
+#     'Use a predicate to partition entries into false entries and true entries'
+#     # partition(is_odd, range(10)) --> 0 2 4 6 8   and  1 3 5 7 9
+#     t1, t2 = tee(iterable)
+#     return filterfalse(pred, t1), filter(pred, t2)
+
+def partition(pred, iterable):
+	return [ x for x in iterable if pred(x) ], [ x for x in iterable if not pred(x) ]
 
 
 
@@ -79,6 +93,12 @@ class JsdocGenerator:
 				print('\t\t%s: %s'%(k, v))
 
 		print('exposed types:\n\t%s'%('\n\t'.join(all_exposed_types)))
+
+		classtypes, defaulttypes = partition(lambda type_: type_ in xmlclasses.keys(), all_exposed_types)
+		print(xmlclasses.keys())
+		print(classes.keys())
+		print('class types: %s'%classtypes)
+		print('default types: %s'%defaulttypes)
 
 		for _, class_ in classes.iteritems():
 			print("var %s = {\n\t// native class\n};"%(class_['name']))
@@ -231,7 +251,7 @@ class JsdocGenerator:
 				'int':   "0",
 				'float': '0.0',
 				'bool':  'false',
-				'undefined': None
+				'void': None
 			}
 			metatypes = {
 				'glm::vec3': '{ x: 0.0, y: 0.0, z: 0.0 }',
@@ -264,12 +284,15 @@ class JsdocGenerator:
 				print("ERROR: %s is not a templated type"%(template_type))
 		if type_ in builtins:
 			return builtins[type_]
+
+		print("ERROR: Unknown type '%s'"%type_)
 		return None
 
 if __name__ == '__main__':
 	generator = JsdocGenerator('interface-api.json')
 
 	os.chdir('../../')		# cd to root dir
+	autobuild()
 	scanner = ScriptApiScanner('docs/xml')
 
 	generator.generate(scanner.scanAllFiles())
