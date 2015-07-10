@@ -121,7 +121,7 @@ class XmlClassFileScanner:
 			# else:
 				# print("WARNING -- unhandled kind: %s (%s)"%(kind, name))
 
-		info = {}
+		info = { 'class': node }
 		if api_exposed_methods or qt_public_slots or qt_properties:
 			if api_exposed_methods:
 				info['exposed_methods']    = api_exposed_methods
