@@ -34,7 +34,7 @@ def gettag(node, tag):
 	return gettext([ elem for elem in node.iter(tag) ][0])
 
 class XmlClassFileScanner:
-	''' Loads and scans a class_**********.xml file '''
+	''' Loads and scans a class_**********.xml file. DEPRECATED. '''
 
 	def __init__(self, classFile):
 		root = ElementTree.parse(classFile).getroot()
@@ -231,13 +231,20 @@ class ScriptApiScanner:
 		root = ElementTree.parse(file_).getroot()
 
 		classnode = [ node for node in root.iter('compounddef') if node.attrib['id'] == classIndex.attrib['refid']][0]
-		assert(classnode.attrib['kind'] == 'class')
+		assert(classnode.attrib['kind'] == 'class' or classnode.attrib['kind'] == 'struct')
 		assert(classnode.attrib['language'] == 'C++')
 		return classnode
 
 	def scanExposedClass(self, scriptedclass):
-		''' Scans a doxygen class node for js-related information (exposed methods, class dependencies, etc). INCOMPLETE atm. '''
-		
+		''' Scans a doxygen class node for js-related information (exposed methods, class dependencies, etc).
+		Returns [ <scanned classes> ], set([ <external types> ])
+		'''
+		if not '_scannedClasses' in self.__dict__:
+			self._scannedClasses = {}
+		if scriptedclass in self._scannedClasses:
+			print("Already scanned class '%s'"%(scriptedclass))
+			return [], set()
+
 		index  = self.getClassIndex(scriptedclass)
 		class_ = self.loadClassXml(index)
 
@@ -250,6 +257,10 @@ class ScriptApiScanner:
 			rtype, params = method['jstype']
 			# print([rtype] + [ param['type'] for param in params ])
 			map(type_dependencies.add, [rtype] + [ param['type'] for param in params ])
+
+		exposed_properties = members['exposed_attribs'] + members['exposed_properties']
+		for prop in exposed_properties:
+			type_dependencies.add(prop['type'])
 
 		hifi_classes = self.getQObjectList()
 		class_set = set([ name for name, _ in hifi_classes ])
@@ -269,20 +280,29 @@ class ScriptApiScanner:
 		print("External types: " + ', '.join(external_types))
 		print('')
 
+		class_ = {
+			'name': scriptedclass,
+			'members': members,
+			'internal_types': internal_types,
+			'external_types': external_types
+		}
+
+		scannedClasses = [class_]
 		for type_ in internal_types:
 			print("scanning dependent class '%s'"%type_)
-			self.scanExposedClass(type_)
-		# print("Types:\n\t%s"%(', '.join(type_dependencies)))
-
-		# print(members['exposed_slots'] + members['exposed_methods'] + members['exposed_signals'])
-
+			classes, externals = self.scanExposedClass(type_)
+			scannedClasses += classes
+			external_types |= externals
+		
+		self._scannedClasses[scriptedclass] = class_
+		return scannedClasses, external_types
 
 	''' Defines what the contents of doxygen member sections are tagged as. 
 	Used by getSectionLookupTable and scanScriptableMembers.
 	'''
 	method_section_categories = [
 		('exposed_methods', []),
-		('exposed_attribs', []),
+		('exposed_attribs', ['public-attrib']),
 		('exposed_signals', ['signal']),
 		('exposed_slots', ['public-slot']),
 		('exposed_properties', ['property']),
@@ -290,7 +310,7 @@ class ScriptApiScanner:
 			'func', 'public-func', 'private-func', 'protected-func', 'package-func',
 			'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func']),
 		('non_exposed_attribs', [
-			'var', 'public-attrib', 'private-attrib', 'protected-attrib', 'package-attrib',
+			'var', 'private-attrib', 'protected-attrib', 'package-attrib',
 			'public-static-attrib', 'private-static-attrib', 'protected-static-attrib', 'package-static-attrib']),
 		('non_exposed_slots', ['private-slot', 'protected-slot']),
 		('non_exposed_signals', []),
@@ -339,6 +359,10 @@ class ScriptApiScanner:
 		methods = ['exposed_methods', 'non_exposed_methods', 'exposed_slots', 'non_exposed_slots', 'exposed_signals', 'non_exposed_signals']
 		for category in methods:
 			members[category] = map(self.parseMethod, members[category])
+
+		if members['exposed_attribs']:
+			members['exposed_attribs'] = map(self.parsePublicAttrib, members['exposed_attribs'])
+
 		self.checkForPropertyMacroDefns(members)
 
 		return members
@@ -355,16 +379,19 @@ class ScriptApiScanner:
 					macro, macro_args = method['name'], [ param['type'] for param in params ]
 					macro_invocations += [(macro, macro_args)]
 			if macro_invocations:
-				print("Found macros:\n\t%s"%'\n\t'.join(['%s(%s)'%(macro, ', '.join(args)) for macro, args in macro_invocations ] ))
+				print("Found un-expanded property macros:\n\t%s"%'\n\t'.join(['%s(%s)'%(macro, ', '.join(args)) for macro, args in macro_invocations ] ))
+				print("Correcting...")
+				# Add as properties
+				print(set([ len(args) for macro, args in macro_invocations ]))
+				print([ (macro, args) for macro, args in macro_invocations if len(args) == 3 ])
+				members['exposed_properties'] += [ {'name': args[2], 'type': args[3] } for macro, args in macro_invocations if len(args) == 4 ] + \
+												 [ {'name': args[1], 'type': args[2] } for macro, args in macro_invocations if len(args) == 3 ]
 
-			# Add as properties
-			members['exposed_properties'] += [ {'name': args[0] } for macro, args in macro_invocations ]
+				# Remove from methods list
+				thingsToDelete = set([ macro for macro, _ in macro_invocations ])
+				members['non_exposed_methods'] = [ thing for thing in members['non_exposed_methods'] if thing['name'] not in thingsToDelete ]
 
-			# Remove from methods list
-			thingsToDelete = set([ macro for macro, _ in macro_invocations ])
-			members['non_exposed_methods'] = [ thing for thing in members['non_exposed_methods'] if thing['name'] not in thingsToDelete ]
-
-		# Handle all cases
+		# Attempt to handle all weird cases
 		checkForPropertyMacroMasqueradingAsMethod()
 
 
@@ -408,6 +435,63 @@ class ScriptApiScanner:
 		methodInfo['details'] = details[0] if details and details[0] else None
 
 		return methodInfo
+
+	def parsePublicAttrib(self, attribnode):
+		''' Parses a doxygen attrib node and returns a python-friendly version of its contents. '''
+		# print(attribnode.__dict__)
+		attribInfo = {
+			'name': self.getNameOfNode(attribnode),
+			'type': map(self.getInnerText, attribnode.iter('type'))[0]
+		}
+		return attribInfo
+
+
+	def parseEntityProperties(self):
+		'''Guess what -- EntityItemProperties is so f***ing convoluted I need tons of custom logic to parse it.
+		Thanks a lot, brad >.>
+		'''
+
+		''' What we know: (update this if anything f***ing changes!!!)
+		- Properties are declared in EntityItemProperties.h using DEFINE_PROPERTY* invokations.
+
+
+		'''
+		entityProperties = self.loadClassXml(self.getClassIndex('EntityItemProperties'))
+		members = self.scanMembers(entityProperties)
+
+		'''
+		Note: DEFINE_PROPERTY, DEFINE_PROPERTY_REF, DEFINE_PROPERTY_WITH_SETTER, DEFINE_PROPERTY_REF_WITH_SETTER,
+		and DEFINE_PROPERTY_REF_WITH_SETTER_AND_GETTER behave functionally identical from a javscript POV.
+
+		They are just variants on the same set of method/attrib decls, where the type T is passed by value or
+		by const ref, and getters/setters either are or are not automatically generated (the methods are exactly
+		the same though).
+
+		DEFINE_PROPERTY_REF_ENUM also does the same thing, but adds... to/from string operations. (why...?)
+
+		All DEFINE_PROPERTY macros have the signature (PROPERTY_ENUM_VALUE, lowercaseVarName, upperCaseVarName, type),
+		and define:
+			- type _varName, bool _varNameChanged attribs
+			- type getVarName(), void setVarName(type value) methods
+			- bool varNameChanged(), void setVarNameChanged (bool value) methods.
+		'''
+
+		defineMacros = { 
+			'DEFINE_PROPERTY': lambda (_, __, name, type_): { 'name': name, 'type': type_ }, 
+			'DEFINE_PROPERTY_REF': lambda (_, __, name, type_): { 'name': name, 'type': type_ }, 
+			'DEFINE_PROPERTY_REF_ENUM': lambda (_, __, name, type_): { 'name': name, 'type': type_ },
+			'DEFINE_PROPERTY_WITH_SETTER': lambda (_, __, name, type_): { 'name': name, 'type': type_ }, 
+			'DEFINE_PROPERTY_REF_WITH_SETTER': lambda (_, __, name, type_): { 'name': name, 'type': type_ }, 
+			'DEFINE_PROPERTY_REF_WITH_SETTER_AND_GETTER': lambda (_, __, name, type_): { 'name': name, 'type': type_ }, 
+			'DEFINE_PROPERTY_REF_WITH_SETTER_AND_GETTER': lambda (_, __, name, type_): { 'name': name, 'type': type_ }
+		}
+
+		properties = [ member for member in members['non_exposed_methods'] if 'DEFINE_PROPERTY' in members['name'] ]
+		properties = [ defineMacros(member['type'][1]) for member in properties ]
+
+
+
+
 
 
 def autobuild ():
@@ -466,5 +550,6 @@ if __name__ == '__main__':
 	print('')
 	print('=' * 80)
 	print('')
-	scanner.scanExposedClass('EntityScriptingInterface')
-
+	scannedClasses, externals = scanner.scanExposedClass('EntityScriptingInterface')
+	print("Scanned classes:\n\t%s"%([ class_['name'] for class_ in scannedClasses ]))
+	print("Depends on external types:\n\t%s"%(', '.join(externals)))
