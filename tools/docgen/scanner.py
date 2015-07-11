@@ -88,7 +88,6 @@ class XmlClassFileScanner:
 	}
 
 	def scanClass(self, node):
-		# print('scanning class: ' + gettag(node, 'compoundname'))
 		name = gettag(node, 'compoundname')
 
 		qt_public_slots = []
@@ -146,7 +145,8 @@ class ScriptApiScanner:
 	def __init__(self, xmldir):
 		self.xmlpath = xmldir
 
-	def reloadIndex (self):
+	def _reloadIndex (self):
+		''' Loads the doxygen index.xml file (which all function/class/etc lookups start at). '''
 		file_ = os.path.join(self.xmlpath, "index.xml")
 		self.index = ElementTree.parse(file_).getroot()
 
@@ -160,8 +160,11 @@ class ScriptApiScanner:
 				self.classFiles.add(os.path.join(self.xmlpath, node.attrib['refid'] + '.xml'))
 
 	def scanAllFiles (self):
+		''' Runs a full scan of the hifi project sources and returns a list of methods + classes that are accessible by the scripting api.
+		Uses multiple instances of XmlClassFileScanner and multithreaded file i/o to do this quickly.
+		'''
 		if not 'classFiles' in self.__dict__:
-			self.reloadIndex()
+			self._reloadIndex()
 
 		pool = Pool(16)
 		results = pool.map(scanFile, self.classFiles)
@@ -175,6 +178,9 @@ class ScriptApiScanner:
 
 
 	def getNameOfNode(self, node, tag = 'name', assignToNode = False):
+		''' Returns the name of an doxygen xml node, where 'tag' is the name of the xml tag containing the name.
+		Can be used to get the contents of other simple nodes as well, so this may need to be renamed/refactored...
+		'''
 		if tag in node.__dict__:
 			return node.__dict__[tag]
 		name = [ ''.join(elem.itertext()) for elem in node.iter(tag) ][0]
@@ -182,23 +188,24 @@ class ScriptApiScanner:
 			node.__dict__[tag] = name
 		return name
 
-	def _getInnerText(self, node):
-		if type(node) == str:
-			return node
-		if node.tag == 'para':
-			return '\n' + node.tag + ''.join(map(self.getInnerText, node))
-		if node.tag == 'ref':
-			return node.text + ''.join(map(self.getInnerText, node))
-		if node.text:
-			return node.text + ''.join(map(self.getInnerText, node))
-		return ''.join(map(self.getInnerText, node))
-
 	def getInnerText(self, node):
-		return self._getInnerText(node).strip()
+		''' Returns the inner text of a doxygen node (converts <p> into '\n' and strips out <ref>) '''
+		def _getInnerText(node): 
+			if type(node) == str:
+				return node
+			if node.tag == 'para':
+				return '\n' + node.tag + ''.join(map(self.getInnerText, node))
+			if node.tag == 'ref':
+				return node.text + ''.join(map(self.getInnerText, node))
+			if node.text:
+				return node.text + ''.join(map(self.getInnerText, node))
+			return ''.join(map(self.getInnerText, node))
+		return _getInnerText(node).strip()
 
 	def getClassIndex(self, name):
+		''' Returns the doxygen class node from index.xml '''
 		if not 'index' in self.__dict__ or self.index is None:
-			self.reloadIndex()
+			self._reloadIndex()
 		classTypes = set(['class', 'struct'])
 		for node in self.index.iter('compound'):
 			if node.attrib['kind'] in classTypes and self.getNameOfNode(node, assignToNode=True):
@@ -206,6 +213,7 @@ class ScriptApiScanner:
 		return None
 
 	def loadClassXml(self, classIndex):
+		''' Loads a doxygen class node from its corresponding .xml file. Use with getClassIndex(name). '''
 		file_ = os.path.join(self.xmlpath, classIndex.attrib['refid'] + '.xml')
 		root = ElementTree.parse(file_).getroot()
 
@@ -215,20 +223,12 @@ class ScriptApiScanner:
 		return classnode
 
 	def scanExposedClass(self, scriptedclass):
+		''' Scans a doxygen class node for js-related information (exposed methods, class dependencies, etc). INCOMPLETE atm. '''
 		index  = self.getClassIndex(scriptedclass)
 		class_ = self.loadClassXml(index)
 
 		members = self.scanMembers(class_)
 
-		# print('\nScanned class %s.'%(scriptedclass))
-		# for category, memberlist in members.iteritems():
-		# 	if len(memberlist) != 0:
-		# 		print('%s: '%(category))
-		# 		for member in memberlist:
-		# 			print('\t%s'%(self.getNameOfNode(member, 'definition')))
-
-
-		# print(members)
 
 	''' Defines what the contents of doxygen member sections are tagged as. 
 	Used by getSectionLookupTable and scanScriptableMembers.
@@ -262,6 +262,7 @@ class ScriptApiScanner:
 		return self.method_section_lookup
 
 	def scanMembers(self, classNode):
+		''' Scans and returns a dict of a class's members, sorted by category. Used by scanExposedClass(). '''
 		members = dict([ (category, []) for category, _ in self.method_section_categories ])
 		lookup  = self.getSectionLookupTable()
 
@@ -275,14 +276,18 @@ class ScriptApiScanner:
 
 		return members
 
-	def toJsType(self, type_, stripConstRef = False):
+	def toJsType(self, type_, strip_const = STRIP_CONST_REF):
+		''' Converts a c++ type to a js-friendly version. 
+		Removes useless decorators like Q_INVOKABLE and SCRIPT_API, and strips const and const & if strip_const == True
+		'''
 		type_ = re.sub(r'(Q_INVOKABLE|SCRIPT_API)', r'\1', type_)
-		if STRIP_CONST_REF or stripConstRef:
+		if strip_const:
 			type_ = re.sub(r'const\s+(.+)\s*&', r'\1', type_)
 			type_ = re.sub(r'const\s+(.+)', r'\1', type_)
 		return type_.strip()
 
 	def parseMethod(self, methodnode):
+		''' Parses a doxygen method node and returns a python-friendly version of its contents. '''
 		methodInfo = {}
 		methodInfo['name'] = self.getNameOfNode(methodnode)
 
@@ -316,6 +321,7 @@ class ScriptApiScanner:
 
 
 def autobuild ():
+	''' Runs doxygen if the documentation has not already been built. '''
 	if not os.path.isfile('docs/config.txt'):
 		print('Missing doxygen config file')
 		system.exit(-1)
@@ -353,24 +359,10 @@ if __name__ == '__main__':
 	num_tagged = lambda (name, info): len(info['exposed_methods']) if 'exposed_methods' in info else 0
 	num_slots  = lambda (name, info): len(info['exposed_slots'])   if 'exposed_slots'   in info else 0
 	num_props  = lambda (name, info): len(info['exposed_properties']) if 'exposed_properties' in info else 0
-	# num_total  = lambda (name, info): num_slots((name, info)) + num_props((name, info))
-
-
-	# fully_tagged_classes = len([ 1 for name, info in results if num_tagged(info) != 0 and num_tagged(info) == num_total(info) ])
-	# tagged_classes       = len([ 1 for name, info in results if num_tagged(info) != 0 ])
 
 	tags = map(num_tagged, results)
 	tagged_classes = filter(lambda n: n != 0, tags)
 	fully_tagged_classes = []
-
-	# tagged_classes       = filter(lambda name, info: num_tagged(name, info) != 0, results)
-	# fully_tagged_classes = filter(lambda name, info: num_tagged(name, info) == num_total(info), tagged_classes)
-
-	# print(map(num_tagged, results))
-	# print(map(lambda info: info['exposed_slots'] if 'exposed_methods' in info else [], results, results))
-
-	# print(tagged_classes)
-	# print(fully_tagged_classes)
 
 	num_tagged_classes   = len(tagged_classes)
 	num_untagged_classes = len(results) - num_tagged_classes
