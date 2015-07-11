@@ -339,11 +339,34 @@ class ScriptApiScanner:
 		methods = ['exposed_methods', 'non_exposed_methods', 'exposed_slots', 'non_exposed_slots', 'exposed_signals', 'non_exposed_signals']
 		for category in methods:
 			members[category] = map(self.parseMethod, members[category])
-		# members['exposed_methods']     = map(self.parseMethod, members['exposed_methods'])
-		# members['non_exposed_methods'] = map(self.parseMethod, members['non_exposed_methods'])
-		# members['exposed_slots']   	   = map(self.parseMethod, )
+		self.checkForPropertyMacroDefns(members)
 
 		return members
+
+
+	def checkForPropertyMacroDefns (self, members):
+		''' BRAD... >.> '''
+
+		def checkForPropertyMacroMasqueradingAsMethod():
+			macro_invocations = []
+			for method in members['non_exposed_methods']:
+				if 'DEFINE_PROPERTY' in method['name']:
+					_, params = method['cpptype']
+					macro, macro_args = method['name'], [ param['type'] for param in params ]
+					macro_invocations += [(macro, macro_args)]
+			if macro_invocations:
+				print("Found macros:\n\t%s"%'\n\t'.join(['%s(%s)'%(macro, ', '.join(args)) for macro, args in macro_invocations ] ))
+
+			# Add as properties
+			members['exposed_properties'] += [ {'name': args[0] } for macro, args in macro_invocations ]
+
+			# Remove from methods list
+			thingsToDelete = set([ macro for macro, _ in macro_invocations ])
+			members['non_exposed_methods'] = [ thing for thing in members['non_exposed_methods'] if thing['name'] not in thingsToDelete ]
+
+		# Handle all cases
+		checkForPropertyMacroMasqueradingAsMethod()
+
 
 	def toJsType(self, type_, strip_const = STRIP_CONST_REF):
 		''' Converts a c++ type to a js-friendly version. 
@@ -383,8 +406,6 @@ class ScriptApiScanner:
 
 		details = map(self.getInnerText, methodnode.iter('detaileddescription'))
 		methodInfo['details'] = details[0] if details and details[0] else None
-
-		# print('{\n\t' + '\n\t'.join([ '%s: %s'%(k, v) for k, v in methodInfo.iteritems() ]) + '\n}')
 
 		return methodInfo
 
@@ -440,9 +461,10 @@ if __name__ == '__main__':
 	print("Results: ")
 	print("    %d exposed classes (%d tagged, %d untagged)"%(len(results), num_tagged_classes, num_untagged_classes))
 	print("    %d exposed methods (%d tagged, %d untagged)"%(num_qt_props + num_qt_slots, num_api_methods, untagged_methods))
+	
+	# Test recursive scanning
 	print('')
 	print('=' * 80)
 	print('')
-
 	scanner.scanExposedClass('EntityScriptingInterface')
 
