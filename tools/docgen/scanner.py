@@ -162,6 +162,8 @@ class ScriptApiScanner:
 	def scanAllFiles (self):
 		''' Runs a full scan of the hifi project sources and returns a list of methods + classes that are accessible by the scripting api.
 		Uses multiple instances of XmlClassFileScanner and multithreaded file i/o to do this quickly.
+
+		This is the old impl.
 		'''
 		if not 'classFiles' in self.__dict__:
 			self._reloadIndex()
@@ -202,13 +204,24 @@ class ScriptApiScanner:
 			return ''.join(map(self.getInnerText, node))
 		return _getInnerText(node).strip()
 
+	def getQObjectList(self):
+		if not '_class_list' in self.__dict__:
+			if not 'index' in self.__dict__ or self.index is None:
+				self._reloadIndex()
+			classTypes = set(['class', 'struct'])
+			self._class_list = [ (
+				self.getNameOfNode(elem), elem.attrib['refid']) 
+				for elem in self.index.iter('compound') 
+				if elem.attrib['kind'] ]
+		return self._class_list
+
 	def getClassIndex(self, name):
 		''' Returns the doxygen class node from index.xml '''
 		if not 'index' in self.__dict__ or self.index is None:
 			self._reloadIndex()
 		classTypes = set(['class', 'struct'])
 		for node in self.index.iter('compound'):
-			if node.attrib['kind'] in classTypes and self.getNameOfNode(node, assignToNode=True):
+			if node.attrib['kind'] in classTypes and self.getNameOfNode(node, assignToNode=True) == name:
 				return node
 		return None
 
@@ -224,28 +237,63 @@ class ScriptApiScanner:
 
 	def scanExposedClass(self, scriptedclass):
 		''' Scans a doxygen class node for js-related information (exposed methods, class dependencies, etc). INCOMPLETE atm. '''
+		
 		index  = self.getClassIndex(scriptedclass)
 		class_ = self.loadClassXml(index)
 
 		members = self.scanMembers(class_)
+		# print [k for k in members if members[k] ]
+
+		exposed_methods = members['exposed_methods'] + members['exposed_slots'] + members['exposed_signals']
+		type_dependencies = set()
+		for method in exposed_methods:
+			rtype, params = method['jstype']
+			# print([rtype] + [ param['type'] for param in params ])
+			map(type_dependencies.add, [rtype] + [ param['type'] for param in params ])
+
+		hifi_classes = self.getQObjectList()
+		class_set = set([ name for name, _ in hifi_classes ])
+
+		print("Scanned class '%s'"%scriptedclass)
+		for category, values in members.iteritems():
+			if values:
+				if type(values[0]) == dict:
+					# Processed method, etc
+					print('%s:\n\t%s'%(category, ', '.join([ val['name'] for val in values ])))
+				else:
+					# Unprocessed doxygen xml node
+					print('%s:\n\t%s'%(category, ', '.join([ self.getNameOfNode(node) for node in values ])))
+
+		internal_types, external_types = type_dependencies.intersection(class_set), type_dependencies.difference(class_set)
+		print("Internal types: " + ', '.join(internal_types))
+		print("External types: " + ', '.join(external_types))
+		print('')
+
+		for type_ in internal_types:
+			print("scanning dependent class '%s'"%type_)
+			self.scanExposedClass(type_)
+		# print("Types:\n\t%s"%(', '.join(type_dependencies)))
+
+		# print(members['exposed_slots'] + members['exposed_methods'] + members['exposed_signals'])
 
 
 	''' Defines what the contents of doxygen member sections are tagged as. 
 	Used by getSectionLookupTable and scanScriptableMembers.
 	'''
 	method_section_categories = [
-		('exposed_methods', 	[]),
-		('exposed_attribs', 	[]),
-		('exposed_signals', 	['signal']),
-		('exposed_slots', 		['public-slot']),
-		('exposed_properties', 	['property']),
+		('exposed_methods', []),
+		('exposed_attribs', []),
+		('exposed_signals', ['signal']),
+		('exposed_slots', ['public-slot']),
+		('exposed_properties', ['property']),
 		('non_exposed_methods', [
 			'func', 'public-func', 'private-func', 'protected-func', 'package-func',
 			'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func']),
 		('non_exposed_attribs', [
 			'var', 'public-attrib', 'private-attrib', 'protected-attrib', 'package-attrib',
 			'public-static-attrib', 'private-static-attrib', 'protected-static-attrib', 'package-static-attrib']),
-		('non_exposed_slots', 	['private-slot', 'protected-slot']),
+		('non_exposed_slots', ['private-slot', 'protected-slot']),
+		('non_exposed_signals', []),
 		('non_exposed_properties', []),
 		('unused', [
 			'user-defined', 'typedef', 'public-type', 'private-type', 'package-type', 'protected-type',
@@ -255,24 +303,45 @@ class ScriptApiScanner:
 		''' Generates and caches a fast lookup table to categorize doxygen xml nodes based on attrib['kind'].
 		Used by scanScriptableMembers; the result is generated from method_section_categories.
 		'''
-		if not 'method_section_lookup' in self.__dict__:
-			self.method_section_lookup = {}
+		if not 'method_section_lookup_table' in self.__dict__:
+			self.method_section_lookup_table = {}
 			for category, kinds in self.method_section_categories:
-				self.method_section_lookup.update(dict([ (kind, category) for kind in kinds ]))
-		return self.method_section_lookup
+				self.method_section_lookup_table.update(dict([ (kind, category) for kind in kinds ]))
+			self._testSectionLookupTable()
+			# print("Method section-lookup-table:")
+			# for k, v in self.method_section_lookup_table.iteritems():
+				# print("\t'%s': '%s'"%(k, v))
+		return self.method_section_lookup_table
+
+	def _testSectionLookupTable(self):
+		''' Tests the lookup table against the section kinds defined in compound.xsd '''
+		doxygen_section_kinds = ["user-defined", "public-type", "public-func", "public-attrib", "public-slot", 
+			"signal", "dcop-func", "property", "event", "public-static-func", "public-static-attrib", "protected-type", 
+			"protected-func", "protected-attrib", "protected-slot", "protected-static-func", "protected-static-attrib", 
+			"package-type", "package-func", "package-attrib", "package-static-func", "package-static-attrib", 
+			"private-type", "private-func", "private-attrib", "private-slot", "private-static-func", 
+			"private-static-attrib", "friend", "related", "define", "prototype", "typedef", "enum", "func", "var"]
+		for thing in doxygen_section_kinds:
+			assert(thing in self.getSectionLookupTable())
 
 	def scanMembers(self, classNode):
 		''' Scans and returns a dict of a class's members, sorted by category. Used by scanExposedClass(). '''
 		members = dict([ (category, []) for category, _ in self.method_section_categories ])
 		lookup  = self.getSectionLookupTable()
 
-		for section in classNode.iter('sectiondef'):
-			print('section %s: '%(section.attrib['kind']) + ', '.join([ self.getNameOfNode(member) for member in section.iter('memberdef') ]))
+		# print(classNode.__dict__)
+		# print([ section.attrib['kind'] for section in classNode.iter('sectiondef') ])
 
+		for section in classNode.iter('sectiondef'):
+			# print('section %s: '%(section.attrib['kind']) + ', '.join([ self.getNameOfNode(member) for member in section.iter('memberdef') ]))
 			members[lookup[section.attrib['kind']]] += [ member for member in section.iter('memberdef') ]
 
-		members['exposed_methods']     = map(self.parseMethod, members['exposed_methods'])
-		members['non_exposed_methods'] = map(self.parseMethod, members['non_exposed_methods'])
+		methods = ['exposed_methods', 'non_exposed_methods', 'exposed_slots', 'non_exposed_slots', 'exposed_signals', 'non_exposed_signals']
+		for category in methods:
+			members[category] = map(self.parseMethod, members[category])
+		# members['exposed_methods']     = map(self.parseMethod, members['exposed_methods'])
+		# members['non_exposed_methods'] = map(self.parseMethod, members['non_exposed_methods'])
+		# members['exposed_slots']   	   = map(self.parseMethod, )
 
 		return members
 
@@ -280,7 +349,7 @@ class ScriptApiScanner:
 		''' Converts a c++ type to a js-friendly version. 
 		Removes useless decorators like Q_INVOKABLE and SCRIPT_API, and strips const and const & if strip_const == True
 		'''
-		type_ = re.sub(r'(Q_INVOKABLE|SCRIPT_API)', r'\1', type_)
+		type_ = re.sub(r'(Q_INVOKABLE|SCRIPT_API)', '', type_)
 		if strip_const:
 			type_ = re.sub(r'const\s+(.+)\s*&', r'\1', type_)
 			type_ = re.sub(r'const\s+(.+)', r'\1', type_)
@@ -315,7 +384,7 @@ class ScriptApiScanner:
 		details = map(self.getInnerText, methodnode.iter('detaileddescription'))
 		methodInfo['details'] = details[0] if details and details[0] else None
 
-		print('{\n\t' + '\n\t'.join([ '%s: %s'%(k, v) for k, v in methodInfo.iteritems() ]) + '\n}')
+		# print('{\n\t' + '\n\t'.join([ '%s: %s'%(k, v) for k, v in methodInfo.iteritems() ]) + '\n}')
 
 		return methodInfo
 
@@ -371,7 +440,9 @@ if __name__ == '__main__':
 	print("Results: ")
 	print("    %d exposed classes (%d tagged, %d untagged)"%(len(results), num_tagged_classes, num_untagged_classes))
 	print("    %d exposed methods (%d tagged, %d untagged)"%(num_qt_props + num_qt_slots, num_api_methods, untagged_methods))
-
+	print('')
+	print('=' * 80)
+	print('')
 
 	scanner.scanExposedClass('EntityScriptingInterface')
 

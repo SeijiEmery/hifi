@@ -87,7 +87,7 @@ class JsdocGenerator:
 				print('\t\t%s'%(t))
 			print('\tdepends on:')
 			for k, v in classinfo['dependencies'].iteritems():
-				print('\t\t%s: %s'%(k, v))
+				print('\t\t% s: %s'%(k, v))
 			print('\tmethods:')
 			for k, v in classinfo['dependencies'].iteritems():
 				print('\t\t%s: %s'%(k, v))
