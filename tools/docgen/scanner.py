@@ -145,6 +145,343 @@ class ScriptApiScanner:
 	def __init__(self, xmldir):
 		self.xmlpath = xmldir
 
+	def _loadIndex(self, **kwargs):
+		file_ = os.path.join(self.xmlpath, "index.xml")
+		self.index = ElementTree.parse(file_).getroot()
+		self.items = {}
+
+
+		# self.classes = {}
+		# self.namespaces = {}
+		# self.methods = {}
+		# self.data_members = {}
+		# self.properties = {}
+		# self.enums = {}
+		# self.enum_values = {}
+		# self.unions = {}
+		# self.typedefs = {}
+		# self.global_variables = {}
+		# self.global_functions = {}
+		# self.friend_decls = {}
+		# self.doxygen_data = {
+		# 	'classes':    	self.classes,
+		# 	'namespaces': 	self.namespaces,
+		# 	'methods':		self.methods,
+		# 	'data_members': self.data_members,
+		# 	'properties':	self.properties,
+		# 	'enums':		self.enums,
+		# 	'enum_values':	self.enum_values,
+		# 	'unions':		self.unions,
+		# 	'typedefs':		self.typedefs,
+		# 	'global_variables':	self.global_variables,
+		# 	'global_functions': self.global_functions,
+		# 	'friend_decls':	self.friend_decls
+		# }
+
+		categories = [ 'classes', 'namespaces', 'methods', 'data_members', 'properties', 'enums', 'enum_values', 'unions', 'typedefs', 'global_variables', 'global_functions', 'friend_decls']
+		for cat in categories:
+			self.__dict__[cat] = {}
+		self.doxygen_data = dict([ (cat, self.__dict__[cat]) for cat in categories ])
+
+		self.scanned_scriptable_values = {}
+		''' <refid>: {
+			name: <name>
+			kind: <kind>
+			type: Function (rtype, (params...)) | Member (type)
+			used_types: [ cpptype ]
+			references:    [ refids called by this ]
+			referenced_by: [ refids referencing this ]
+		}
+		'''
+
+		self.scannedItems = {}
+		self._scanIndex(**kwargs)
+
+	def _scanIndex(self, print_indexed_items = False, print_index_summary = False, print_warnings = True, print_aliases = True):
+		if print_warnings:
+			def warn(*args):
+				print('WARNING: ' + ''.join(map(str, args)))
+		else:
+			def warn(*args):
+				pass
+
+		# dict of str: set([ str ])
+		aliased_members = {}
+
+		def scanContainer(container, member_map):
+			def scanNode(node):
+				name = self.getNameOfNode(node)
+				self.items[node.attrib['refid']] = {
+					'name': name,
+					'kind': node.attrib['kind'],
+					'members': dict([(member.attrib['refid'], {
+							'kind': member.attrib['kind'],
+							'name': name,
+							'parent': node.attrib['refid']
+						}) for member in node.iter('member')])
+				}
+				container[name] = node.attrib['refid']
+				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
+					member_name = name + '::' + member['name']
+					cat         = member_map[member['kind']]
+					if member_name in cat:
+						# Handle aliases / overloads
+						# print("Alias! %s (%d)"%(member_name, len(aliased_members)))
+						# alias_len = len(aliased_members)
+
+					 	if type(cat[member_name]) == list:
+					 		cat[member_name] += [ refid ]
+					 		aliased_members[member_name] += [ refid ]
+					 	else:
+					 		aliased_members[member_name] = [ cat[member_name], refid ]
+					 		cat[member_name] = [ cat[member_name], refid ]
+					 	# print(alias_len, len(aliased_members))
+					 	# print(aliased_members)
+					else:
+						cat[member_name] = refid
+					self.items[refid] = member
+			return scanNode
+
+		scanClassNode = scanContainer(self.classes, {
+			'property': self.properties,
+			'variable': self.data_members,
+			'function': self.methods,
+			'slot':		self.methods,
+			'signal':	self.methods,
+			'typedef':  self.typedefs,
+			'enum':		self.enums,
+			'enumvalue': self.enum_values,
+			'union':	self.unions,
+			'class':	self.classes,
+			'struct': 	self.classes,
+			'friend':   self.friend_decls
+		})
+		scanNamespace = scanContainer(self.namespaces, {
+			'variable': self.global_variables,
+			'function': self.global_functions,
+			'typedef':  self.typedefs,
+			'enum':  	self.enums,
+			'enumvalue': self.enum_values
+		})
+		scanUnion     = scanContainer(self.unions, {
+			'variable': self.global_variables,
+			'function': self.global_functions,
+			'typedef':  self.typedefs,
+			'enum':  	self.enums,
+			'enumvalue': self.enum_values,
+			'union':	self.unions
+		})
+
+		def __ignore__():
+			def scanClassNode(node):
+				name = self.getNameOfNode(node)
+				self.items[node.attrib['refid']] = {
+					'name': name,
+					'kind': node.attrib['kind'],
+					'members': dict([(member.attrib['refid'], {
+							'kind': member.attrib['kind'],
+							'name': self.getNameOfNode(member),
+							'parent': node.attrib['refid']
+						}) for member in node.iter('member')])
+				}
+				if name in self.classes:
+					print('%s already defined as %s'%(name, self.classes['name']))
+					print('also defined as %s'%(node.attrib['refid']))
+					return
+				self.classes[name] = node.attrib['refid']
+				member_map = {
+					'property': self.properties,
+					'variable': self.data_members,
+					'function': self.methods,
+					'slot':		self.methods,
+					'signal':	self.methods,
+					'typedef':  self.typedefs,
+					'enum':		self.enums,
+					'enumvalue': self.enum_values,
+					'union':	self.unions,
+					'class':	self.classes,
+					'struct': 	self.classes,
+					'friend':   self.friend_decls
+				}
+				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
+					member_name = name + '::' + member['name']
+					cat         = member_map[member['kind']]
+					if member_name in cat:
+					# 	# Handle overloads / aliases
+					 	if type(cat[member_name]) == list:
+					 		cat[member_name] += [ refid ]
+					 		aliased_members[member_name].add(member['kind'])
+					 	else:
+					 		aliased_members[member_name] = set([
+					 			self.items[cat[member_name]]['kind'],
+					 			member['kind'] ])
+					 		cat[member_name] = [ cat[member_name], refid ]
+					else:
+						cat[member_name] = refid
+					self.items[refid] = member
+	
+			def scanNamespace(node):
+				name = self.getNameOfNode(node)
+				self.items[node.attrib['refid']] = {
+					'name': name,
+					'kind': node.attrib['kind'],
+					'members': dict([(member.attrib['refid'], {
+							'kind': member.attrib['kind'],
+							'name': self.getNameOfNode(member),
+							'parent': node.attrib['refid']
+						}) for member in node.iter('member')])
+				}
+				if name in self.namespaces:
+					warn('%s already defined as %s'%(name, self.classes['name']))
+					warn('also defined as %s'%(node.attrib['refid']))
+					return
+				self.namespaces[name] = node.attrib['refid']
+				member_map = {
+					'variable': self.global_variables,
+					'function': self.global_functions,
+					'typedef':  self.typedefs,
+					'enum':  	self.enums,
+					'enumvalue': self.enum_values
+				}
+				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
+					member_map[member['kind']][name + '::' + member['name']] = refid
+					if not refid in self.items:
+						self.items[refid] = member
+					else:
+						warn("Duplicate member %s"%refid)
+	
+			def scanUnion(node):
+				name = self.getNameOfNode(node)
+				self.items[node.attrib['refid']] = {
+					'name': name,
+					'kind': node.attrib['kind'],
+					'members': dict([(member.attrib['refid'], {
+							'kind': member.attrib['kind'],
+							'name': self.getNameOfNode(member),
+							'parent': node.attrib['refid']
+						}) for member in node.iter('member')])
+				}
+				if name in self.namespaces:
+					warn('%s already defined as %s'%(name, self.classes['name']))
+					warn('also defined as %s'%(node.attrib['refid']))
+					return
+				self.unions[name] = node.attrib['refid']
+				member_map = {
+					'variable': self.global_variables,
+					'function': self.global_functions,
+					'typedef':  self.typedefs,
+					'enum':  	self.enums,
+					'enumvalue': self.enum_values,
+					'union':	self.unions
+				}
+				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
+					member_map[member['kind']][name + '::' + member['name']] = refid
+					if not refid in self.items:
+						self.items[refid] = member
+					else:
+						warn("Duplicate member %s"%refid)
+
+		def warnNoScan(node):
+			warn("Not parsing %s (%s)"%(self.getNameOfNode(node), node.attrib['kind']))
+		def ignore(node):
+			pass
+
+		parseRules = {
+			'struct':    scanClassNode,
+			'class':     scanClassNode,
+			'example':   warnNoScan,
+			'dir':       ignore,
+			'union':     scanUnion,
+			'namespace': scanNamespace,
+			'file':      ignore, 	# source files + headers
+			'page':      ignore		# readmes, etc
+		}
+
+		# Scan everything in index
+		unhandledKinds = set()
+		for node in self.index.iter('compound'):
+			if node.attrib['kind'] in parseRules:
+				parseRules[node.attrib['kind']](node)
+			else:
+				unhandledKinds.add(node.attrib['kind'])
+
+		# print(len(aliased_members))
+		# print(aliased_members)
+		if aliased_members and print_aliases:
+			print("%d aliases"%(len(aliased_members)))
+			for name, refids in aliased_members.iteritems():
+				print("%s has %d aliases:\n\t"%(name, len(refids)) + '\n\t'.join([
+					'%s %s (child of %s %s)'%(
+						self.items[refid]['kind'], refid, 
+						self.items[self.items[refid]['parent']]['kind'], self.items[refid]['parent'])
+					for refid in refids ]))
+
+		# Scan for things that are defined in one place (self.items) but not another
+		# (self.classes | self.namespaces | self.members | ...)
+		undefined_values = []
+
+		# get the set of all refids, then remove anything that is stored somewhere else
+		# what remains is not contained in self.classes, etc.,
+		dangling_references = set(self.items.keys())		
+		for cat, elems in self.doxygen_data.iteritems():
+			for name, item in elems.iteritems():
+				if type(item) == str:	
+					# item is a refid
+					if item in dangling_references:
+						dangling_references.remove(item)
+					else:
+						undefined_values += [(name, refid)]
+				elif type(item) == list:
+					# item is (should be) a list of refids
+					for ref in item:
+						if ref in dangling_references:
+							dangling_references.remove(ref)
+						else:
+							undefined_values += [(name, refid)]
+				else:
+					warn('%s is not a refid: %s'%(name, item))
+
+		for ref in dangling_references:
+			print("cannot access %s:  %s"%(ref, self.items[ref]))
+			print(self.items[ref])
+			parent = self.items[self.items[ref]['parent']]
+			members = parent['members'] if 'members' in parent else []
+			if members:
+				print('parent has items:\n\t' + '\n\t'.join([ '%s:   %s'%(childref, self.items[childref]['kind']) for childref in members ]))
+
+		if print_indexed_items:
+			for thing_type, thing in self.doxygen_data.iteritems():
+				print('%d %s: '%(len(thing), thing_type))
+				for name, item in thing.iteritems():
+					print('\t%s: %s'%(name, item))
+
+		if print_index_summary:
+			print('indexed ' + ', '.join([ '%d %s'%(len(things), thing) for thing, things in self.doxygen_data.iteritems() if things ]))
+			non_indexed_things = [ thing for thing, things in self.doxygen_data.iteritems() if not things ]
+			if non_indexed_things:
+				if len(non_indexed_things) > 1:
+					print('no ' + ', '.join(non_indexed_things[:-1]) + ', or ' + non_indexed_things[-1])
+				else:
+					print('no ' + ', '.join(non_indexed_things))
+
+		if print_warnings:
+			if dangling_references:
+				print('WARNING: %d values are indexed, but not referencable:\n\t'%len(dangling_references) + '\n\t'.join(
+					[ '%s    (%s)'%(ref, self.items[ref]) for ref in dangling_references]))
+			if undefined_values:
+				print('WARNING: %d values are referenced, but not indexed:\n\t'%(len(undefined_values)) + '\n\t'.join(
+					[ '%s    (%s)'%item for item in undefined_values ]))
+
+		if unhandledKinds:
+			print("Unhandled kinds: " + ', '.join(unhandledKinds))
+
+	def getIndex (self):
+		''' Gets the doxygen index.xml file as an ElementNode '''
+		if not 'index' in self.__dict__:
+			self._loadIndex()
+		return self.index
+
+
 	def _reloadIndex (self):
 		''' Loads the doxygen index.xml file (which all function/class/etc lookups start at). '''
 		file_ = os.path.join(self.xmlpath, "index.xml")
@@ -512,44 +849,47 @@ if __name__ == '__main__':
 	autobuild()
 
 	scanner = ScriptApiScanner('docs/xml')
-	results = scanner.scanAllFiles()
-
-	for name, info in results:
-		print("Exposed class: %s"%name)
-		if 'exposed_methods' in info:
-			print("SCRIPT_API:   " + ', '.join([ name for name, _ in info['exposed_methods']]))
-		if 'exposed_slots' in info:
-			print("public slots: " + ', '.join([ slot for slot, _ in info['exposed_slots']]))
-		if 'exposed_properties' in info:
-			print("properites:   " + ', '.join([ name for name, _ in infor['exposed_properites']]))
-		print('')
+	scanner._loadIndex(print_indexed_items = False, print_index_summary = True)
 
 
-	num_api_methods = sum([ len(info['exposed_methods']) for name, info in results if 'exposed_methods' in info ])
-	num_qt_slots    = sum([ len(info['exposed_slots'])   for name, info in results if 'exposed_slots' in info ])
-	num_qt_props    = sum([ len(info['exposed_properties']) for name, info in results if 'exposed_properties' in info ])
-	untagged_methods = num_qt_slots + num_qt_props - num_api_methods
+	# results = scanner.scanAllFiles()
 
-	num_tagged = lambda (name, info): len(info['exposed_methods']) if 'exposed_methods' in info else 0
-	num_slots  = lambda (name, info): len(info['exposed_slots'])   if 'exposed_slots'   in info else 0
-	num_props  = lambda (name, info): len(info['exposed_properties']) if 'exposed_properties' in info else 0
+	# for name, info in results:
+	# 	print("Exposed class: %s"%name)
+	# 	if 'exposed_methods' in info:
+	# 		print("SCRIPT_API:   " + ', '.join([ name for name, _ in info['exposed_methods']]))
+	# 	if 'exposed_slots' in info:
+	# 		print("public slots: " + ', '.join([ slot for slot, _ in info['exposed_slots']]))
+	# 	if 'exposed_properties' in info:
+	# 		print("properites:   " + ', '.join([ name for name, _ in infor['exposed_properites']]))
+	# 	print('')
 
-	tags = map(num_tagged, results)
-	tagged_classes = filter(lambda n: n != 0, tags)
-	fully_tagged_classes = []
 
-	num_tagged_classes   = len(tagged_classes)
-	num_untagged_classes = len(results) - num_tagged_classes
+	# num_api_methods = sum([ len(info['exposed_methods']) for name, info in results if 'exposed_methods' in info ])
+	# num_qt_slots    = sum([ len(info['exposed_slots'])   for name, info in results if 'exposed_slots' in info ])
+	# num_qt_props    = sum([ len(info['exposed_properties']) for name, info in results if 'exposed_properties' in info ])
+	# untagged_methods = num_qt_slots + num_qt_props - num_api_methods
 
-	print("Finished scanning %d files."%len(scanner.classFiles))
-	print("Results: ")
-	print("    %d exposed classes (%d tagged, %d untagged)"%(len(results), num_tagged_classes, num_untagged_classes))
-	print("    %d exposed methods (%d tagged, %d untagged)"%(num_qt_props + num_qt_slots, num_api_methods, untagged_methods))
+	# num_tagged = lambda (name, info): len(info['exposed_methods']) if 'exposed_methods' in info else 0
+	# num_slots  = lambda (name, info): len(info['exposed_slots'])   if 'exposed_slots'   in info else 0
+	# num_props  = lambda (name, info): len(info['exposed_properties']) if 'exposed_properties' in info else 0
+
+	# tags = map(num_tagged, results)
+	# tagged_classes = filter(lambda n: n != 0, tags)
+	# fully_tagged_classes = []
+
+	# num_tagged_classes   = len(tagged_classes)
+	# num_untagged_classes = len(results) - num_tagged_classes
+
+	# print("Finished scanning %d files."%len(scanner.classFiles))
+	# print("Results: ")
+	# print("    %d exposed classes (%d tagged, %d untagged)"%(len(results), num_tagged_classes, num_untagged_classes))
+	# print("    %d exposed methods (%d tagged, %d untagged)"%(num_qt_props + num_qt_slots, num_api_methods, untagged_methods))
 	
-	# Test recursive scanning
-	print('')
-	print('=' * 80)
-	print('')
-	scannedClasses, externals = scanner.scanExposedClass('EntityScriptingInterface')
-	print("Scanned classes:\n\t%s"%([ class_['name'] for class_ in scannedClasses ]))
-	print("Depends on external types:\n\t%s"%(', '.join(externals)))
+	# # Test recursive scanning
+	# print('')
+	# print('=' * 80)
+	# print('')
+	# scannedClasses, externals = scanner.scanExposedClass('EntityScriptingInterface')
+	# print("Scanned classes:\n\t%s"%([ class_['name'] for class_ in scannedClasses ]))
+	# print("Depends on external types:\n\t%s"%(', '.join(externals)))
