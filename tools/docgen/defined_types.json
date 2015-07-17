@@ -1,0 +1,46 @@
+{
+	"builtin-types": [
+		{
+			"cpptype": "QString",
+			"jstype":  "string",
+			"default": "\"\""
+		},
+		{
+			"cpptype": "float",
+			"jstype": "Number",
+			"default": "0.0"
+		},
+		{
+			"cpptype": "bool",
+			"jstype": "bool",
+			"default": "false"
+		},
+		{
+			"cpptype": "void",
+			"jstype":  "undefined",
+			"default": "undefined"
+		},
+		{
+			"cpptype": "int",
+			"jstype":  "Number",
+			"default": "0"
+		}
+	],
+	"templated-types": [
+		{
+			"cpptype": "QVector",	// <T> is implicit
+			"jstype":  "{0}[]",		// defined for python string substitution of types / values via format()
+			"default": "[ {0} ]"
+		}
+	],
+	"defined-types": [
+		{
+			"cpptype": "glm::vec3",
+			"jstype":  "glm_vec3",
+			"jsconstructor": "function () { this.x = 0.0; this.y = 0.0; this.z = 0.0; }",
+			"methods": {
+				"toString": "function () { return \"\"; }"
+			}
+		}
+	]
+}

@@ -79,9 +79,6 @@ class JsdocGenerator:
 
 		classes = dict([ (cls['name'], cls) for cls in classes ])
 
-		# print(jstypes)
-		# print(jsvals)
-		
 		undefined_externals = filter(lambda type_: type_ not in jstypes, externals)
 		print("Undefined external types:\n\t%s"%(', '.join(undefined_externals)))
 
@@ -89,32 +86,27 @@ class JsdocGenerator:
 			jstypes[thing] = thing
 			jsvals [thing] = 'undefined'
 
-		# print(jstypes.keys())
-		# print(jsvals.keys())
-		# print(jsvals.values())
-
 		global_object_list = [ cls_['cpp'] for cls_ in self.jsconfig['global-objects'] ]
 
 		global_objects  = [ class_ for class_ in classes.itervalues() if class_['name'] in global_object_list ]
 		exposed_classes = [ class_ for class_ in classes.itervalues() if class_['name'] not in global_object_list ]
-
-		# print([ obj['name'] for obj in global_objects ])
-		# print([ cls['name'] for cls in exposed_classes ])
 
 		header = ''
 		body   = ''
 
 		for obj in self.jsconfig['global-objects']:
 			name, cls = obj['js'], classes[obj['cpp']]
+
+			header += '\n/** @namespace */'
 			header += '\nvar %s = {'%(cls['name'])
 			for attrib in (cls['members']['exposed_attribs'] + cls['members']['exposed_properties']):
-				header += '\n\t"%s": %s'%(attrib['name'], jsvals[jstypes[apiScanner.toJsType(attrib['type'])]])
-			header += '};'
+				header += '\n\t"this.%s": %s'%(attrib['name'], jsvals[jstypes[apiScanner.toJsType(attrib['type'])]])
+			header += '};\n'
 
 			methods = cls['members']['exposed_methods'] + cls['members']['exposed_slots'] + cls['members']['exposed_signals']
 			for method in methods:
 				rval, _ = method['jstype']
-				body += self.generateMethodDocstring(method) + '\n'
+				body += self.generateMethodDocstring(method, ['@static']) + '\n'
 				body += self.generateMethodStub(name, method, jsvals[jstypes[rval]]) + '\n\n'
 				
 		for cls in exposed_classes:
@@ -127,8 +119,8 @@ class JsdocGenerator:
 					print("Unknown type: %s"%attrib['type'])
 			header += '\n};\n'
 
-			methods = cls['members']['exposed_methods'] + cls['members']['exposed_slots'] + cls['members']['exposed_signals'] + \
-					  cls['members']['non_exposed_methods']
+			methods = cls['members']['exposed_methods'] + cls['members']['exposed_slots'] + cls['members']['exposed_signals']# + \
+			#		  cls['members']['non_exposed_methods']
 			for method in methods:
 				# print(method)
 				rtype, _ = method['jstype']
@@ -144,83 +136,6 @@ class JsdocGenerator:
 
 		print(header)
 		print(body)
-
-
-	# def generate (self, scannedContent):
-	# 	xmlclasses = dict(scannedContent)
-	# 	classes = {}
-	# 	all_exposed_types = set()
-
-	# 	for v in self.jsconfig['global-objects']:
-	# 		cppname, jsname = v['cpp'], v['js']
-	# 		classxml = xmlclasses[cppname]
-
-	# 		getelem = lambda dict_, key: dict_[key] if key in dict_ else {}
-
-	# 		methodxml = getelem(classxml, 'exposed_methods').copy()
-	# 		slots     = getelem(classxml, 'exposed_slots')
-	# 		methodxml.update(slots)
-	# 		properties = getelem(classxml, 'exposed_properties')
-			
-	# 		print(classxml['class'].__dict__)
-	# 		classinfo = {
-	# 			'name': jsname,
-	# 			'id':   classxml['class'].attrib['id'],
-	# 			'dependencies': {},
-	# 			'exposed-types': set([]),
-	# 			'methods': {}
-	# 		}
-	# 		classes[jsname] = classinfo
-
-	# 		for name, node in methodxml.iteritems():
-	# 			method = self.parseMethod(node)
-	# 			classinfo['methods'][name] = method
-
-	# 			classinfo['dependencies'].update(method['references'])
-	# 			if method['returntype']:
-	# 				classinfo['exposed-types'].add(self.toJsType(method['returntype'], stripConstRef = True))
-	# 			for param in method['params']:
-	# 				classinfo['exposed-types'].add(self.toJsType(param['type'], stripConstRef = True))
-
-	# 			print("METHOD")
-	# 			for k, v in method.iteritems():
-	# 				print('\t%s: %s'%(k, v))
-
-	# 		all_exposed_types |= classinfo['exposed-types']
-
-	# 		print('class %s'%classinfo['name'])
-	# 		print('\tid: %s'%classinfo['id'])
-	# 		print('\texposed types:')
-	# 		for t in classinfo['exposed-types']:
-	# 			print('\t\t%s'%(t))
-	# 		print('\tdepends on:')
-	# 		for k, v in classinfo['dependencies'].iteritems():
-	# 			print('\t\t% s: %s'%(k, v))
-	# 		print('\tmethods:')
-	# 		for k, v in classinfo['dependencies'].iteritems():
-	# 			print('\t\t%s: %s'%(k, v))
-
-	# 	print('exposed types:\n\t%s'%('\n\t'.join(all_exposed_types)))
-
-	# 	classtypes, defaulttypes = partition(lambda type_: type_ in xmlclasses.keys(), all_exposed_types)
-	# 	print(xmlclasses.keys())
-	# 	print(classes.keys())
-	# 	print('class types: %s'%classtypes)
-	# 	print('default types: %s'%defaulttypes)
-
-	# 	for _, class_ in classes.iteritems():
-	# 		print("var %s = {\n\t// native class\n};"%(class_['name']))
-	# 		for _, method in class_['methods'].iteritems():
-	# 			print(self.generateMethodDocstring(method))
-	# 			print(self.generateMethodStub(class_['name'], method))
-
-	# 			# print('method %s:'%name)
-	# 			# self.parseMethod(node, jsname)
-	# 			# print('method %s:\n\t%s\n'%(name, node.__dict__))
-
-	# 		for name, node in properties.iteritems():
-	# 			print('property %s:\n\t%s\n'%(name, node.__dict__))
-
 
 	def parseMethod(self, node):
 		method = {
@@ -304,7 +219,7 @@ class JsdocGenerator:
 				print("Unknown elem '%s': %s"%(elem.tag, repr(elem.__dict__)))
 		return method
 
-	def generateMethodDocstring(self, method):
+	def generateMethodDocstring(self, method, injected_lines = None):
 		docstring = '/** ' + (method['brief'] or '\n')
 		if method['details']:
 			for line in method['details']:
@@ -313,16 +228,19 @@ class JsdocGenerator:
 		rtype, params = method['jstype']
 
 		# print(params)
+		for line in injected_lines:
+			docstring += ' * %s\n'%(line)
 		for param in params:
 			name = param['declname'] if 'declname' in param else param['defname']
-			s = '@param {%s} %s'%(self.toJsType(param['type']), name)
+			s = '@param {%s} %s'%(self.toJsType(param['type']).replace(':', '_'), name)
 			if 'defaultvalue' in param.keys():
 				s += ' = %s'%param['defaultvalue']
 			if 'description' in param.keys():
 				s += ' ' + param['description']
 			docstring += ' * %s\n'%(s)
-		if rtype:
-			docstring += ' * @return {%s}\n'%(rtype)
+		injected_lines = injected_lines or []
+		if rtype and rtype != 'void':
+			docstring += ' * @return {%s}\n'%(rtype.replace(':', '_'))
 		docstring += ' */'
 		return docstring
 
@@ -332,9 +250,9 @@ class JsdocGenerator:
 
 		return ('%s.%s = function (%s) {\n' 	    + \
 			    '    // native code\n' 			+ \
-			    '    // (%s:%s)\n' 			    + \
-			    ('    return %s;\n' % rval if rval else '') + \
-			    '};') % (objdecl, method['name'], params, '', 0)#method['file'], method['line'])
+			    ('    // (%s:%s)\n' and '')	    + \
+			    ('    return %s;\n' % rval if (rval and rval != 'undefined') else '') + \
+			    '};') % (objdecl, method['name'], params)#, '', 0)#method['file'], method['line'])
 
 	def toJsType (self, cpptype, stripConstRef = False):
 		# print(cpptype)

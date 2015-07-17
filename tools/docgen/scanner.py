@@ -141,44 +141,34 @@ def scanFile(file_):
 		print("EXCEPTION: ")
 		print(e)
 
+def loadXml(refid):
+	pass
+
+class DoxyRef:
+	def __init__(self, refid, constructorClass):
+		self.refid
+		self.constructorClass = constructorClass
+
+	def load (self):
+		return self.constructorClass(self, loadXml(self.refid))
+
+class DoxyClass:
+	pass
+
+
 class ScriptApiScanner:
 	def __init__(self, xmldir):
 		self.xmlpath = xmldir
 
-	def _loadIndex(self, **kwargs):
+	def loadIndex(self, **kwargs):
+		if 'index' in self.__dict__:
+			return
 		file_ = os.path.join(self.xmlpath, "index.xml")
 		self.index = ElementTree.parse(file_).getroot()
 		self.items = {}
 
-
-		# self.classes = {}
-		# self.namespaces = {}
-		# self.methods = {}
-		# self.data_members = {}
-		# self.properties = {}
-		# self.enums = {}
-		# self.enum_values = {}
-		# self.unions = {}
-		# self.typedefs = {}
-		# self.global_variables = {}
-		# self.global_functions = {}
-		# self.friend_decls = {}
-		# self.doxygen_data = {
-		# 	'classes':    	self.classes,
-		# 	'namespaces': 	self.namespaces,
-		# 	'methods':		self.methods,
-		# 	'data_members': self.data_members,
-		# 	'properties':	self.properties,
-		# 	'enums':		self.enums,
-		# 	'enum_values':	self.enum_values,
-		# 	'unions':		self.unions,
-		# 	'typedefs':		self.typedefs,
-		# 	'global_variables':	self.global_variables,
-		# 	'global_functions': self.global_functions,
-		# 	'friend_decls':	self.friend_decls
-		# }
-
-		categories = [ 'classes', 'namespaces', 'methods', 'data_members', 'properties', 'enums', 'enum_values', 'unions', 'typedefs', 'global_variables', 'global_functions', 'friend_decls']
+		categories = [ 'classes', 'namespaces', 'enums', 'enum_values', 'unions', 
+			'methods', 'data_members', 'properties', 'typedefs', 'global_variables', 'global_functions', 'friend_decls']
 		for cat in categories:
 			self.__dict__[cat] = {}
 		self.doxygen_data = dict([ (cat, self.__dict__[cat]) for cat in categories ])
@@ -195,48 +185,47 @@ class ScriptApiScanner:
 		'''
 
 		self.scannedItems = {}
-		self._scanIndex(**kwargs)
+		self.scanIndex(**kwargs)
 
-	def _scanIndex(self, print_indexed_items = False, print_index_summary = False, print_warnings = True, print_aliases = True):
+	def scanIndex(self, print_warnings = True, print_indexed_items = False, print_index_summary = False, print_aliases = False):
 		if print_warnings:
 			def warn(*args):
 				print('WARNING: ' + ''.join(map(str, args)))
 		else:
 			def warn(*args):
 				pass
-
-		# dict of str: set([ str ])
 		aliased_members = {}
 
 		def scanContainer(container, member_map):
 			def scanNode(node):
-				name = self.getNameOfNode(node)
+				name = self.getNodeName(node)
 				self.items[node.attrib['refid']] = {
 					'name': name,
 					'kind': node.attrib['kind'],
 					'members': dict([(member.attrib['refid'], {
 							'kind': member.attrib['kind'],
-							'name': name,
+							'name': name + '::' + self.getNodeName(member),
+							'refid': member.attrib['refid'],
 							'parent': node.attrib['refid']
 						}) for member in node.iter('member')])
 				}
 				container[name] = node.attrib['refid']
 				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
-					member_name = name + '::' + member['name']
+					# member_name = name + '::' + member['name']
+					# print(name, member['name'], member_name, node.attrib['kind'], member['kind'])
+					member_name = member['name']
 					cat         = member_map[member['kind']]
 					if member_name in cat:
 						# Handle aliases / overloads
-						# print("Alias! %s (%d)"%(member_name, len(aliased_members)))
-						# alias_len = len(aliased_members)
-
-					 	if type(cat[member_name]) == list:
-					 		cat[member_name] += [ refid ]
-					 		aliased_members[member_name] += [ refid ]
-					 	else:
-					 		aliased_members[member_name] = [ cat[member_name], refid ]
-					 		cat[member_name] = [ cat[member_name], refid ]
-					 	# print(alias_len, len(aliased_members))
-					 	# print(aliased_members)
+						if type(cat[member_name]) == list:
+							aliases = [ refid ]
+							cat[member_name] += aliases
+						else:
+							aliases = [ cat[member_name], refid ]
+							cat[member_name] = aliases
+						if not member_name in aliased_members:
+							aliased_members[member_name] = set()
+						map(aliased_members[member_name].add, aliases)
 					else:
 						cat[member_name] = refid
 					self.items[refid] = member
@@ -272,117 +261,8 @@ class ScriptApiScanner:
 			'union':	self.unions
 		})
 
-		def __ignore__():
-			def scanClassNode(node):
-				name = self.getNameOfNode(node)
-				self.items[node.attrib['refid']] = {
-					'name': name,
-					'kind': node.attrib['kind'],
-					'members': dict([(member.attrib['refid'], {
-							'kind': member.attrib['kind'],
-							'name': self.getNameOfNode(member),
-							'parent': node.attrib['refid']
-						}) for member in node.iter('member')])
-				}
-				if name in self.classes:
-					print('%s already defined as %s'%(name, self.classes['name']))
-					print('also defined as %s'%(node.attrib['refid']))
-					return
-				self.classes[name] = node.attrib['refid']
-				member_map = {
-					'property': self.properties,
-					'variable': self.data_members,
-					'function': self.methods,
-					'slot':		self.methods,
-					'signal':	self.methods,
-					'typedef':  self.typedefs,
-					'enum':		self.enums,
-					'enumvalue': self.enum_values,
-					'union':	self.unions,
-					'class':	self.classes,
-					'struct': 	self.classes,
-					'friend':   self.friend_decls
-				}
-				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
-					member_name = name + '::' + member['name']
-					cat         = member_map[member['kind']]
-					if member_name in cat:
-					# 	# Handle overloads / aliases
-					 	if type(cat[member_name]) == list:
-					 		cat[member_name] += [ refid ]
-					 		aliased_members[member_name].add(member['kind'])
-					 	else:
-					 		aliased_members[member_name] = set([
-					 			self.items[cat[member_name]]['kind'],
-					 			member['kind'] ])
-					 		cat[member_name] = [ cat[member_name], refid ]
-					else:
-						cat[member_name] = refid
-					self.items[refid] = member
-	
-			def scanNamespace(node):
-				name = self.getNameOfNode(node)
-				self.items[node.attrib['refid']] = {
-					'name': name,
-					'kind': node.attrib['kind'],
-					'members': dict([(member.attrib['refid'], {
-							'kind': member.attrib['kind'],
-							'name': self.getNameOfNode(member),
-							'parent': node.attrib['refid']
-						}) for member in node.iter('member')])
-				}
-				if name in self.namespaces:
-					warn('%s already defined as %s'%(name, self.classes['name']))
-					warn('also defined as %s'%(node.attrib['refid']))
-					return
-				self.namespaces[name] = node.attrib['refid']
-				member_map = {
-					'variable': self.global_variables,
-					'function': self.global_functions,
-					'typedef':  self.typedefs,
-					'enum':  	self.enums,
-					'enumvalue': self.enum_values
-				}
-				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
-					member_map[member['kind']][name + '::' + member['name']] = refid
-					if not refid in self.items:
-						self.items[refid] = member
-					else:
-						warn("Duplicate member %s"%refid)
-	
-			def scanUnion(node):
-				name = self.getNameOfNode(node)
-				self.items[node.attrib['refid']] = {
-					'name': name,
-					'kind': node.attrib['kind'],
-					'members': dict([(member.attrib['refid'], {
-							'kind': member.attrib['kind'],
-							'name': self.getNameOfNode(member),
-							'parent': node.attrib['refid']
-						}) for member in node.iter('member')])
-				}
-				if name in self.namespaces:
-					warn('%s already defined as %s'%(name, self.classes['name']))
-					warn('also defined as %s'%(node.attrib['refid']))
-					return
-				self.unions[name] = node.attrib['refid']
-				member_map = {
-					'variable': self.global_variables,
-					'function': self.global_functions,
-					'typedef':  self.typedefs,
-					'enum':  	self.enums,
-					'enumvalue': self.enum_values,
-					'union':	self.unions
-				}
-				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
-					member_map[member['kind']][name + '::' + member['name']] = refid
-					if not refid in self.items:
-						self.items[refid] = member
-					else:
-						warn("Duplicate member %s"%refid)
-
 		def warnNoScan(node):
-			warn("Not parsing %s (%s)"%(self.getNameOfNode(node), node.attrib['kind']))
+			warn("Not parsing %s (%s)"%(self.getNodeName(node), node.attrib['kind']))
 		def ignore(node):
 			pass
 
@@ -441,13 +321,13 @@ class ScriptApiScanner:
 				else:
 					warn('%s is not a refid: %s'%(name, item))
 
-		for ref in dangling_references:
-			print("cannot access %s:  %s"%(ref, self.items[ref]))
-			print(self.items[ref])
-			parent = self.items[self.items[ref]['parent']]
-			members = parent['members'] if 'members' in parent else []
-			if members:
-				print('parent has items:\n\t' + '\n\t'.join([ '%s:   %s'%(childref, self.items[childref]['kind']) for childref in members ]))
+		# for ref in dangling_references:
+			# print("cannot access %s:  %s"%(ref, self.items[ref]))
+			# print(self.items[ref])
+			# parent = self.items[self.items[ref]['parent']]
+			# members = parent['members'] if 'members' in parent else []
+			# if members:
+				# print('parent has items:\n\t' + '\n\t'.join([ '%s:   %s'%(childref, self.items[childref]['kind']) for childref in members ]))
 
 		if print_indexed_items:
 			for thing_type, thing in self.doxygen_data.iteritems():
@@ -481,6 +361,149 @@ class ScriptApiScanner:
 			self._loadIndex()
 		return self.index
 
+	def getScriptable(self, class_list):
+		''' Scans everything in the class_list and does recursive searcing for all that touch or reference these classes.
+		Note: the items in class_list do not have to be classes -- they can be classes, structs, enums, functions, 
+		global variables, methods, etc '''
+		pass
+
+	def scanItem(self, refid):
+		for cat, elems in self.doxygen_data.iteritems():
+			for elem in elems:
+				if elem == refid or (type(elem) == dict and elem['refid'] == refid):
+					self._reloadClass(self.doxygen_data[cat], elem)
+					return self.items[refid]
+
+	def loadClass(self, className):
+		self.loadIndex()
+		if not className in self.classes:
+			return None
+		if type(self.classes[className]) == str:
+			self._reloadClass(self.classes, className)
+		return self.classes[className]
+
+
+	def getClass(self, name, *args):
+		if not name in self.classes:
+			raise Exception("%s is not a class"%(name))
+
+		if type(self.classes[name]) == list:
+			# Load and visit all aliases
+			for i, alias in enumerate(self.classes[name]):
+				if type(alias) == 'str':
+					alias = self.scanItem(alias, *args)
+				else:
+					alias = self.scanItem(alias['refid'], *args)
+				self.classes[name][i] = alias
+		else:
+			refid = self.classes[name] if type(self.classes[name] == str) else self.classes[name]['refid']
+			self.classes[name] = self.scanItem(refid, *args)
+		return self.classes[name]
+
+
+	def scanItem(self, refid, visitor = None):
+		# refid = classes[name]
+		xmlfile = os.path.join(self.xmlpath, '%s.xml'%(refid))
+		xml = ElementTree.parse(xmlfile).getroot()
+
+		classNode = self.getCompoundDefWithId(xml, refid)
+		class_ = self.items[refid]
+		if '_scanned' in self.items[refid]:
+			if visitor:
+				visitor(class_)
+			return class_
+		class_['_scanned'] = True
+
+		assert(class_['name'] == self.getNodeName(classNode, tag='compoundname'))
+
+		referenced_types = set()
+		referenced_type_ids = set()
+
+		xml_members = self.getMemberSectionDefs(classNode)
+		for member_id in class_['members']:
+			sectiondef, memberdef = xml_members[member_id]
+			member = self.items[member_id]
+
+			# print(memberdef)
+			# print(memberdef.__dict__)
+
+			assert(member['kind'] == memberdef.attrib['kind'])
+
+			member['section'] = sectiondef.attrib['kind']
+			member['description'] = {
+				'brief':   self.getChildInnerXml(memberdef, 'briefdescription', preserveChildNodes = True),
+				'details': self.getChildInnerXml(memberdef, 'detaileddescription', preserveChildNodes = True),
+				'inbody':  self.getChildInnerXml(memberdef, 'inbodydescription', preserveChildNodes = True)
+			}
+			loc = self.getChildNode(memberdef, 'location')
+			# print(loc)
+			# print(list(memberdef.iter('location')))
+			# if loc:
+
+			assert(member['name'] == class_['name'] + '::' + self.getNodeName(memberdef))
+			# member['name'] = self.getNodeName(memberdef)
+			member['file'] = loc.attrib['file']
+			member['line'] = loc.attrib['line']
+			member['type'] = self.getChildInnerXml(memberdef, 'type', preserveChildNodes = False)
+			member['params'] = [{
+				'name': self.getInnerXml(self.getChildNode(param, 'declname'), preserveChildNodes = False),
+				'type': self.getInnerXml(self.getChildNode(param, 'type'), preserveChildNodes = False)
+			} for param in memberdef.iter('param')]
+
+			if member['params']:
+				print(member['name'])
+				print(member['type'])
+				print(member['params'])
+
+			# 	def showInternals(obj):
+			# 		if obj is not None:
+			# 			return obj.__dict__
+			# 		return None
+
+				# print([ (showInternals(self.getChildNode(param, 'type')), showInternals(self.getChildNode(param, 'declname'))) for param in memberdef.iter('param')])
+				# print()
+
+			referenced_types.add(self.getChildInnerXml(memberdef, 'type', preserveChildNodes = False))
+			for ref in self.getChildNode(memberdef, 'type').iter('ref'):
+				try:
+					referenced_type_ids.add(ref.attrib['refid'])
+				except AttributeError:
+					print("WARNING: ref has no refid: %s %s"%(ref, ref.__dict__))
+
+			for param in memberdef.iter('param'):
+				referenced_types.add(self.getChildInnerXml(param, 'type', preserveChildNodes = False))
+
+		# classes[name] = class_
+
+		print("Scanned %s %s"%(class_['kind'], class_['name']))
+		if referenced_types:
+			print("%d referenced type(s): %s"%(len(referenced_types), ', '.join(referenced_types)))
+			print("%d referended refid(s): %s"%(len(referenced_type_ids), ', '.join(referenced_type_ids)))
+		
+		class_['referenced_type_ids'] = referenced_type_ids
+		class_['referenced_types']    = referenced_types
+		class_['recursive_type_list']  = set(referenced_types)
+
+		print("Loading classes...")
+		for refid in referenced_types:
+		 	cls = self.scanItem(refid)
+		 	if cls is None:
+		 		print("Null scanItem(): '%s'"%refid)
+		 		assert(False)
+		 	class_['recursive_type_list'] |= cls['recursive_type_list']
+		return class_
+
+	def getCompoundDefWithId(self, root, refid):
+		for compound in root.iter('compounddef'):
+			if compound.attrib['id'] == refid:
+				return compound
+
+	def getMemberSectionDefs(self, compounddef):
+		def iterSectionsAndMembers ():
+			for sectiondef in compounddef.iter('sectiondef'):
+				for memberdef in sectiondef.iter('memberdef'):
+					yield (memberdef.attrib['id'], (sectiondef, memberdef))
+		return dict(iterSectionsAndMembers())
 
 	def _reloadIndex (self):
 		''' Loads the doxygen index.xml file (which all function/class/etc lookups start at). '''
@@ -516,7 +539,7 @@ class ScriptApiScanner:
 		return results_
 
 
-	def getNameOfNode(self, node, tag = 'name', assignToNode = False):
+	def getNodeName(self, node, tag = 'name', assignToNode = False):
 		''' Returns the name of an doxygen xml node, where 'tag' is the name of the xml tag containing the name.
 		Can be used to get the contents of other simple nodes as well, so this may need to be renamed/refactored...
 		'''
@@ -526,6 +549,40 @@ class ScriptApiScanner:
 		if assignToNode:
 			node.__dict__[tag] = name
 		return name
+
+	def getChildInnerXml(self, node, tag, **kwargs):
+		return self.getInnerXml(self.getChildNode(node, tag) or '', **kwargs)
+
+	def getInnerXml(self, node, preserveChildNodes = False, ignoredTags = None):
+		nullGuard = lambda s: s if s is not None else ''
+		def getInnerWithTags(node):
+			if type(node) == str:
+				return node
+			text = nullGuard(node.text) + ''.join(map(getInnerWithTags, node))
+			if ignoredTags and node.tag in ignoredTags:
+				return text
+			attribs = ' %s '%(' '.join([ '%s="%s"'%(k, v) for k, v in node.attrib.iteritems() ])) \
+				if node.attrib else ''
+			return '<%s%s>%s</%s>'%(node.tag, attribs, text, node.tag)
+
+		def getInnerWithoutTags(node):
+			if type(node) == str:
+				return node
+			return nullGuard(node.text) + ''.join(map(getInnerWithoutTags, node))
+
+		if node is None or type(node) == str:
+			return node
+		return nullGuard(node.text) + ''.join(map( ((preserveChildNodes and getInnerWithTags) or getInnerWithoutTags), node))
+		# return ((preserveChildNodes and getInnerWithTags) or getInnerWithoutTags)(node)
+		# return inner.strip() != '' and inner or ''
+
+		# print(node.__dict__)
+		# if preserveChildNodes:
+			# return getInnerWithTags(node)
+		# return getInnerWithoutTags(node)
+			# return ''.join(map(getInnerWithTags, node))
+		# return ''.join(map(getInnerWithoutTags, node))
+
 
 	def getInnerText(self, node):
 		''' Returns the inner text of a doxygen node (converts <p> into '\n' and strips out <ref>) '''
@@ -541,13 +598,20 @@ class ScriptApiScanner:
 			return ''.join(map(self.getInnerText, node))
 		return _getInnerText(node).strip()
 
+	def getChildNode(self, node, tag):
+		elems = list(node.iter(tag))
+		if len(elems) > 0:
+			return elems[0]
+		return None
+		# return ((len(elems) > 0) and elems[0]) or None
+
 	def getQObjectList(self):
 		if not '_class_list' in self.__dict__:
 			if not 'index' in self.__dict__ or self.index is None:
 				self._reloadIndex()
 			classTypes = set(['class', 'struct'])
 			self._class_list = [ (
-				self.getNameOfNode(elem), elem.attrib['refid']) 
+				self.getNodeName(elem), elem.attrib['refid']) 
 				for elem in self.index.iter('compound') 
 				if elem.attrib['kind'] ]
 		return self._class_list
@@ -558,7 +622,7 @@ class ScriptApiScanner:
 			self._reloadIndex()
 		classTypes = set(['class', 'struct'])
 		for node in self.index.iter('compound'):
-			if node.attrib['kind'] in classTypes and self.getNameOfNode(node, assignToNode=True) == name:
+			if node.attrib['kind'] in classTypes and self.getNodeName(node, assignToNode=True) == name:
 				return node
 		return None
 
@@ -596,8 +660,6 @@ class ScriptApiScanner:
 			map(type_dependencies.add, [rtype] + [ param['type'] for param in params ])
 
 		exposed_properties = members['exposed_attribs'] + members['exposed_properties']
-		for prop in exposed_properties:
-			type_dependencies.add(prop['type'])
 
 		hifi_classes = self.getQObjectList()
 		class_set = set([ name for name, _ in hifi_classes ])
@@ -610,7 +672,7 @@ class ScriptApiScanner:
 					print('%s:\n\t%s'%(category, ', '.join([ val['name'] for val in values ])))
 				else:
 					# Unprocessed doxygen xml node
-					print('%s:\n\t%s'%(category, ', '.join([ self.getNameOfNode(node) for node in values ])))
+					print('%s:\n\t%s'%(category, ', '.join([ self.getNodeName(node) for node in values ])))
 
 		internal_types, external_types = type_dependencies.intersection(class_set), type_dependencies.difference(class_set)
 		print("Internal types: " + ', '.join(internal_types))
@@ -690,7 +752,7 @@ class ScriptApiScanner:
 		# print([ section.attrib['kind'] for section in classNode.iter('sectiondef') ])
 
 		for section in classNode.iter('sectiondef'):
-			# print('section %s: '%(section.attrib['kind']) + ', '.join([ self.getNameOfNode(member) for member in section.iter('memberdef') ]))
+			# print('section %s: '%(section.attrib['kind']) + ', '.join([ self.getNodeName(member) for member in section.iter('memberdef') ]))
 			members[lookup[section.attrib['kind']]] += [ member for member in section.iter('memberdef') ]
 
 		methods = ['exposed_methods', 'non_exposed_methods', 'exposed_slots', 'non_exposed_slots', 'exposed_signals', 'non_exposed_signals']
@@ -745,7 +807,7 @@ class ScriptApiScanner:
 	def parseMethod(self, methodnode):
 		''' Parses a doxygen method node and returns a python-friendly version of its contents. '''
 		methodInfo = {}
-		methodInfo['name'] = self.getNameOfNode(methodnode)
+		methodInfo['name'] = self.getNodeName(methodnode)
 
 		rtype  = map(self.getInnerText, methodnode.iter('type'))
 		rtype  = rtype[0] if rtype else None
@@ -777,7 +839,7 @@ class ScriptApiScanner:
 		''' Parses a doxygen attrib node and returns a python-friendly version of its contents. '''
 		# print(attribnode.__dict__)
 		attribInfo = {
-			'name': self.getNameOfNode(attribnode),
+			'name': self.getNodeName(attribnode),
 			'type': map(self.getInnerText, attribnode.iter('type'))[0]
 		}
 		return attribInfo
@@ -849,7 +911,10 @@ if __name__ == '__main__':
 	autobuild()
 
 	scanner = ScriptApiScanner('docs/xml')
-	scanner._loadIndex(print_indexed_items = False, print_index_summary = True)
+	scanner.loadIndex(print_indexed_items = False, print_index_summary = True)
+
+	scanner.getClass('EntityScriptingInterface')
+	# print(scanner.loadClass('EntityScriptingInterface'))
 
 
 	# results = scanner.scanAllFiles()
