@@ -23,17 +23,6 @@ Need to get list of:
 
 STRIP_CONST_REF = True
 
-
-def scanFile(file_):
-	try:
-		return XmlClassFileScanner(file_).results or None
-	except Exception, e:
-		print("EXCEPTION: ")
-		print(e)
-
-def loadXml(refid):
-	pass
-
 class DoxyRef:
 	def __init__(self, refid, constructorClass):
 		self.refid
@@ -44,6 +33,70 @@ class DoxyRef:
 
 class DoxyClass:
 	pass
+
+
+class XmlScanner:
+	def __init__(self, xmldir):
+		self.xmlpath = xmldir
+
+	@staticmethod
+	def _getNodeText(node, tag = 'text', xmlify = False):
+		def inner():
+			if type(node) == str: return node
+			if tag in node.__dict__:
+				return node.__dict__[tag]
+			return ''
+		if xmlify:
+			return XmlScanner.xmlify(inner())
+		return inner()
+
+	@staticmethod
+	def _getInner(node, processChildren):
+		return XmlScanner._getNodeText(node) + ''.join(map(processChildren), node)
+
+	@staticmethod
+	def getInnerXml(node, tag = None, preserveChildNodes = True, ignoredTags = None):
+		def getInner(node):
+			if type(node) == str:
+				return node
+			text = XmlScanner._getNodeText(node, xmlify=True) + ''.join(map(getInner, node))
+			if preserveChildNodes == False or (ignoredTags and node.tag in ignoredTags):
+				return text + XmlScanner._getNodeText(node, tag='tail', xmlify=True)
+			attribs = ' %s'%(' '.join([ '%s="%s"'%(k, v) for k, v in node.attrib.iteritems() ])) \
+				if node.attrib else ''
+			return '<%s%s>%s</%s>'%(node.tag, attribs, text, node.tag) + XmlScanner._getNodeText(node, tag='tail', xmlify=True)
+		if type(node) == str:
+			return node
+		if tag is None:
+			return XmlScanner._getNodeText(node, xmlify=True) + ''.join(map(getInner, node)) + XmlScanner._getNodeText(node, tag='tail', xmlify=True)
+		return ''.join([ XmlScanner.getInnerXml(elem, preserveChildNodes=preserveChildNodes, ignoredTags=ignoredTags) for elem in node.iter(tag) ])
+
+	@staticmethod
+	def xmlify(text):
+		return text.replace('<', '&lt;').replace('>', '&gt;')
+
+	@staticmethod
+	def unxmlify(text):
+		return text.replace('&lt;', '<').replace('&gt;', '>')
+
+	def getChildInnerXml(self, node, tag, **kwargs):
+		return self.getInnerXml(self.getChildNode(node, tag) or '', **kwargs)
+
+	def __getInnerXml(self, node, preserveChildNodes = False, ignoredTags = None):
+		nullGuard = lambda s: s if s is not None else ''
+		def getInnerWithTags(node):
+			if type(node) == str:
+				return node
+			text = nullGuard(node.text) + ''.join(map(getInnerWithTags, node))
+			if ignoredTags and node.tag in ignoredTags:
+				return text
+			attribs = ' %s '%(' '.join([ '%s="%s"'%(k, v) for k, v in node.attrib.iteritems() ])) \
+				if node.attrib else ''
+			return '<%s%s>%s</%s>'%(node.tag, attribs, text, node.tag)
+
+
+		
+
 
 
 class ScriptApiScanner:
@@ -652,6 +705,9 @@ class ScriptApiScanner:
 		if members['exposed_attribs']:
 			members['exposed_attribs'] = map(self.parsePublicAttrib, members['exposed_attribs'])
 
+		if members['exposed_properties']:
+			members['exposed_properties'] = map(self.parseProperty, members['exposed_properties'])
+
 		self.checkForPropertyMacroDefns(members)
 
 		return members
@@ -734,6 +790,19 @@ class ScriptApiScanner:
 		}
 		return attribInfo
 
+	def parseProperty(self, propertynode):
+		''' Parses a doxygen property node and returns a python-friendly version of its contents. '''
+		propertyInfo = {
+			'name': self.getNodeName(propertynode),
+			'type': self.getChildInnerXml(propertynode, 'type')
+		}
+		print("PARSED PROPERTY %s from %s\n%s\n"%(propertyInfo, propertynode, propertynode.__dict__))
+		for node in propertynode:
+			print('\t%s: %s'%(node.tag, node.__dict__))
+		print('')
+
+
+		return propertyInfo
 
 	def parseEntityProperties(self):
 		'''Guess what -- EntityItemProperties is so f***ing convoluted I need tons of custom logic to parse it.

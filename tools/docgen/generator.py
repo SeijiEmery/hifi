@@ -99,6 +99,18 @@ class JsdocGenerator:
 
 			header += '\n/** @namespace */'
 			header += '\nvar %s = {'%(cls['name'])
+
+			print("EXPOSED_METHODS: ")
+			print(cls['members']['exposed_methods'])
+			print(cls['members']['exposed_slots'])
+			print(cls['members']['exposed_signals'])
+			print('')
+
+			print("EXPOSED ATTRIBUTES: ")
+			print(cls['members']['exposed_attribs'])
+			print(cls['members']['exposed_properties'])
+			print('')
+
 			for attrib in (cls['members']['exposed_attribs'] + cls['members']['exposed_properties']):
 				header += '\n\t"this.%s": %s'%(attrib['name'], jsvals[jstypes[apiScanner.toJsType(attrib['type'])]])
 			header += '};\n'
