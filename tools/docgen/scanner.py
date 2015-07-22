@@ -23,18 +23,6 @@ Need to get list of:
 
 STRIP_CONST_REF = True
 
-class DoxyRef:
-	def __init__(self, refid, constructorClass):
-		self.refid
-		self.constructorClass = constructorClass
-
-	def load (self):
-		return self.constructorClass(self, loadXml(self.refid))
-
-class DoxyClass:
-	pass
-
-
 class XmlScanner:
 	def __init__(self, xmldir):
 		self.xmlpath = xmldir
@@ -56,6 +44,22 @@ class XmlScanner:
 
 	@staticmethod
 	def getInnerXml(node, tag = None, preserveChildNodes = True, ignoredTags = None):
+		''' Returns the inner xml of an ElementTree node (or, optionally, just the text content).
+
+		@param node: ElementTree node
+		@param tag:	 Optional child tag to pull xml from. If set to default (None), will pull the text + xml
+			of everything inside node (minus the node's actual tags)
+		@param preserveChildNodes: stringifies the contents of xml sub-tags iff this is true. Ignores/strips
+			out all tags otherwise.
+		@param ignoredTags: Additional list of tags to explicitely ignore. Does not do anything if 
+			preserveChildNodes = False.
+
+		Gotchas: This will implicitely convert '<' and '>' to '&lt;' and '&gt;', regardless of whether
+		the text contains any inner xml tags or not (if it does, this is needed to get the contents back
+		to a format that can be parsed by ElementTree again). To just get the text contents of a node (with)
+		tags removed (useful if you're parsing a text node that contains metadata), do:
+			XmlScanner.unxmlify(XmlScanner.getinnerXml(parent_node, tag=child_tag, preserveChildNodes=False))
+		'''
 		def getInner(node):
 			if type(node) == str:
 				return node
@@ -79,29 +83,12 @@ class XmlScanner:
 	def unxmlify(text):
 		return text.replace('&lt;', '<').replace('&gt;', '>')
 
-	def getChildInnerXml(self, node, tag, **kwargs):
-		return self.getInnerXml(self.getChildNode(node, tag) or '', **kwargs)
-
-	def __getInnerXml(self, node, preserveChildNodes = False, ignoredTags = None):
-		nullGuard = lambda s: s if s is not None else ''
-		def getInnerWithTags(node):
-			if type(node) == str:
-				return node
-			text = nullGuard(node.text) + ''.join(map(getInnerWithTags, node))
-			if ignoredTags and node.tag in ignoredTags:
-				return text
-			attribs = ' %s '%(' '.join([ '%s="%s"'%(k, v) for k, v in node.attrib.iteritems() ])) \
-				if node.attrib else ''
-			return '<%s%s>%s</%s>'%(node.tag, attribs, text, node.tag)
-
-
-		
-
-
-
-class ScriptApiScanner:
-	def __init__(self, xmldir):
-		self.xmlpath = xmldir
+	def getNodeName(self, node, tag = 'name'):
+		''' Returns the name of an doxygen xml node, where 'tag' is the name of the xml tag containing the name.
+		Can be used to get the contents of other simple nodes as well, so this may need to be renamed/refactored...
+		'''
+		name = [ ''.join(elem.itertext()) for elem in node.iter(tag) ][0]
+		return name
 
 	def loadIndex(self, **kwargs):
 		if 'index' in self.__dict__:
@@ -126,11 +113,104 @@ class ScriptApiScanner:
 			referenced_by: [ refids referencing this ]
 		}
 		'''
-
 		self.scannedItems = {}
 		self.scanIndex(**kwargs)
 
+	class DoxyRef:
+		def __init__(self, constructor=None, kind=None, refid=None, name=None, members=None, parent=None, xmlpath=None):
+			self.constructor = constructor
+			self.refid = refid
+			self.kind  = kind
+			self.name  = name
+			self.members = members
+			self.parent  = parent
+			self.xmlpath = xmlpath
+
+		def load(self):
+			return self.constructor(self)
+
+	class DoxyClass:
+		def __init__(self, ref):
+			print("Loading class %s"%(ref.refid))
+			file_ = os.path.join(ref.xmlpath, ref.refid + '.xml')
+			print("from file: '%s'"%file_)
+			root = ElementTree.parse(file_).getroot()
+			clsnode = [ node for node in root.iter('compounddef') if node.attrib['id'] == ref.refid ][0]
+
+			self.refid  = ref.refid
+			self.kind   = ref.kind
+			self.name   = ref.name
+			self.parent = ref.parent
+			self.parseMembers(ref.members, clsnode.iter('sectiondef'))
+
+		def parseMembers(self, expectedMembers, sections):
+			self.methods_by_category = {}
+			expectedIds = set(expectedMembers.keys())
+			for section in sections:
+				category = self.categorize(section.attrib['kind'])
+				self.methods_by_category[category] = [ 
+					member for member in section.iter('memberdef') 
+					if member.attrib['id'] in expectedIds ]
+			print(self.methods_by_category)
+
+		def parseMember(self, expectedMembers, memberxml):
+			pass
+
+
+
+		def categorize(self, kind):
+			return self.getSectionLookupTable()[kind]
+
+		method_section_categories = [
+			('exposed_methods', []),
+			('exposed_attribs', ['public-attrib']),
+			('exposed_signals', ['signal']),
+			('exposed_slots', ['public-slot']),
+			('exposed_properties', ['property']),
+			('non_exposed_methods', [
+				'func', 'public-func', 'private-func', 'protected-func', 'package-func',
+				'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func']),
+			('non_exposed_attribs', [
+				'var', 'private-attrib', 'protected-attrib', 'package-attrib',
+				'public-static-attrib', 'private-static-attrib', 'protected-static-attrib', 'package-static-attrib']),
+			('non_exposed_slots', ['private-slot', 'protected-slot']),
+			('non_exposed_signals', []),
+			('non_exposed_properties', []),
+			('unused', [
+				'user-defined', 'typedef', 'public-type', 'private-type', 'package-type', 'protected-type',
+				'dcop-func', 'event', 'friend', 'related', 'define', 'prototype', 'enum'])
+		]
+		def getSectionLookupTable(self):
+			''' Generates and caches a fast lookup table to categorize doxygen xml nodes based on attrib['kind'].
+			Used by scanScriptableMembers; the result is generated from method_section_categories.
+			'''
+			if not 'method_section_lookup_table' in self.__dict__:
+				self.method_section_lookup_table = {}
+				for category, kinds in self.method_section_categories:
+					self.method_section_lookup_table.update(dict([ (kind, category) for kind in kinds ]))
+				self._testSectionLookupTable()
+				# print("Method section-lookup-table:")
+				# for k, v in self.method_section_lookup_table.iteritems():
+					# print("\t'%s': '%s'"%(k, v))
+			return self.method_section_lookup_table
+	
+		def _testSectionLookupTable(self):
+			''' Tests the lookup table against the section kinds defined in compound.xsd '''
+			doxygen_section_kinds = ["user-defined", "public-type", "public-func", "public-attrib", "public-slot", 
+				"signal", "dcop-func", "property", "event", "public-static-func", "public-static-attrib", "protected-type", 
+				"protected-func", "protected-attrib", "protected-slot", "protected-static-func", "protected-static-attrib", 
+				"package-type", "package-func", "package-attrib", "package-static-func", "package-static-attrib", 
+				"private-type", "private-func", "private-attrib", "private-slot", "private-static-func", 
+				"private-static-attrib", "friend", "related", "define", "prototype", "typedef", "enum", "func", "var"]
+			for thing in doxygen_section_kinds:
+				assert(thing in self.getSectionLookupTable())
+			
+
+		def load(self):
+			return self
+
 	def scanIndex(self, print_warnings = True, print_indexed_items = False, print_index_summary = False, print_aliases = False):
+		self.loadIndex()
 		if print_warnings:
 			def warn(*args):
 				print('WARNING: ' + ''.join(map(str, args)))
@@ -140,39 +220,50 @@ class ScriptApiScanner:
 		aliased_members = {}
 
 		def scanContainer(container, member_map):
+			''' Constructs a funciton that scans a doxygen class, struct, namespace, union, etc (container types) '''
 			def scanNode(node):
-				name = self.getNodeName(node)
-				self.items[node.attrib['refid']] = {
-					'name': name,
-					'kind': node.attrib['kind'],
-					'members': dict([(member.attrib['refid'], {
-							'kind': member.attrib['kind'],
-							'name': name + '::' + self.getNodeName(member),
-							'refid': member.attrib['refid'],
-							'parent': node.attrib['refid']
-						}) for member in node.iter('member')])
-				}
-				container[name] = node.attrib['refid']
-				for refid, member in self.items[node.attrib['refid']]['members'].iteritems():
-					# member_name = name + '::' + member['name']
-					# print(name, member['name'], member_name, node.attrib['kind'], member['kind'])
-					member_name = member['name']
-					cat         = member_map[member['kind']]
+				name, refid = self.getNodeName(node), node.attrib['refid']
+				ref = self.DoxyRef(
+					xmlpath = self.xmlpath,
+					constructor = self.DoxyClass,
+					refid = refid,
+					name = name,
+					kind = node.attrib['kind'],
+					members = dict([(member.attrib['refid'], self.DoxyRef(
+						refid = member.attrib['refid'],
+						name = name + '::' + self.getNodeName(member),
+						kind = member.attrib['kind'],
+						parent = refid
+					)) for member in node.iter('member') ])
+				)
+				self.items[refid] = ref
+				container[name] = set([ ref ])
+				for refid, member in ref.members.iteritems():
+					member_name = member.name
+					cat  		= member_map[member.kind]
+
+					# Insert member, accounting for aliases
 					if member_name in cat:
-						# Handle aliases / overloads
-						if type(cat[member_name]) == list:
-							aliases = [ refid ]
-							cat[member_name] += aliases
-						else:
-							aliases = [ cat[member_name], refid ]
-							cat[member_name] = aliases
-						if not member_name in aliased_members:
-							aliased_members[member_name] = set()
-						map(aliased_members[member_name].add, aliases)
+						cat[member_name].add(member)
 					else:
-						cat[member_name] = refid
+						cat[member_name] = set([ member ])
 					self.items[refid] = member
 			return scanNode
+
+		def scanAndPrintAliases():
+			global_aliases = {}
+			for cat, names in self.doxygen_data.iteritems():
+				aliases = [ (name, members) for name, members in names.iteritems() if len(members) > 1 ]
+				for name, members in aliases:
+					if not name in global_aliases:
+						global_aliases[name] = [ (cat, members) ]
+					else:
+						global_aliases[name] += [ (cat, members) ]
+			print("\nDetected aliases / overloads:")
+			for name, cats in global_aliases.iteritems():
+				print("%d aliases for '%s:'"%(sum([ len(things) for _, things in cats ]), name))
+				for cat, refs in cats:
+					print('\t%d %s: '%(len(refs), cat) + ', '.join([ ref.refid for ref in refs ]))
 
 		scanClassNode = scanContainer(self.classes, {
 			'property': self.properties,
@@ -227,50 +318,10 @@ class ScriptApiScanner:
 				parseRules[node.attrib['kind']](node)
 			else:
 				unhandledKinds.add(node.attrib['kind'])
+		if print_aliases:
+			scanAndPrintAliases()
 
-		# print(len(aliased_members))
-		# print(aliased_members)
-		if aliased_members and print_aliases:
-			print("%d aliases"%(len(aliased_members)))
-			for name, refids in aliased_members.iteritems():
-				print("%s has %d aliases:\n\t"%(name, len(refids)) + '\n\t'.join([
-					'%s %s (child of %s %s)'%(
-						self.items[refid]['kind'], refid, 
-						self.items[self.items[refid]['parent']]['kind'], self.items[refid]['parent'])
-					for refid in refids ]))
-
-		# Scan for things that are defined in one place (self.items) but not another
-		# (self.classes | self.namespaces | self.members | ...)
 		undefined_values = []
-
-		# get the set of all refids, then remove anything that is stored somewhere else
-		# what remains is not contained in self.classes, etc.,
-		dangling_references = set(self.items.keys())		
-		for cat, elems in self.doxygen_data.iteritems():
-			for name, item in elems.iteritems():
-				if type(item) == str:	
-					# item is a refid
-					if item in dangling_references:
-						dangling_references.remove(item)
-					else:
-						undefined_values += [(name, refid)]
-				elif type(item) == list:
-					# item is (should be) a list of refids
-					for ref in item:
-						if ref in dangling_references:
-							dangling_references.remove(ref)
-						else:
-							undefined_values += [(name, refid)]
-				else:
-					warn('%s is not a refid: %s'%(name, item))
-
-		# for ref in dangling_references:
-			# print("cannot access %s:  %s"%(ref, self.items[ref]))
-			# print(self.items[ref])
-			# parent = self.items[self.items[ref]['parent']]
-			# members = parent['members'] if 'members' in parent else []
-			# if members:
-				# print('parent has items:\n\t' + '\n\t'.join([ '%s:   %s'%(childref, self.items[childref]['kind']) for childref in members ]))
 
 		if print_indexed_items:
 			for thing_type, thing in self.doxygen_data.iteritems():
@@ -287,16 +338,29 @@ class ScriptApiScanner:
 				else:
 					print('no ' + ', '.join(non_indexed_things))
 
-		if print_warnings:
-			if dangling_references:
-				print('WARNING: %d values are indexed, but not referencable:\n\t'%len(dangling_references) + '\n\t'.join(
-					[ '%s    (%s)'%(ref, self.items[ref]) for ref in dangling_references]))
-			if undefined_values:
-				print('WARNING: %d values are referenced, but not indexed:\n\t'%(len(undefined_values)) + '\n\t'.join(
-					[ '%s    (%s)'%item for item in undefined_values ]))
+		self.assertNoAliasedClasses()
 
-		if unhandledKinds:
-			print("Unhandled kinds: " + ', '.join(unhandledKinds))
+	def assertNoAliasedClasses(self):
+		for k, v in self.classes.iteritems():
+			assert(len(v) == 1)
+
+	def autoload(self, things, name):
+		things[name] = [ thing.load() for thing in things[name] ]
+
+	def getClass(self, name, autoload = True):
+		if name in self.classes:
+			if autoload:
+				self.autoload(self.classes, name)
+
+			# Assume there are no aliased classes
+			for cls in self.classes[name]:
+				return cls
+		return None
+
+
+class ScriptApiScanner:
+	def __init__(self, xmldir):
+		self.xmlpath = xmldir
 
 	def getIndex (self):
 		''' Gets the doxygen index.xml file as an ElementNode '''
@@ -856,7 +920,7 @@ def autobuild ():
 	''' Runs doxygen if the documentation has not already been built. '''
 	if not os.path.isfile('docs/config.txt'):
 		print('Missing doxygen config file')
-		system.exit(-1)
+		sys.exit(-1)
 
 	if not os.path.isfile('docs/xml/index.xml'):
 		print('Generating docs...')
@@ -869,10 +933,10 @@ if __name__ == '__main__':
 	os.chdir('../../')	# Navigate to root hifi directory
 	autobuild()
 
-	scanner = ScriptApiScanner('docs/xml')
+	scanner = XmlScanner('docs/xml')
 	scanner.loadIndex(print_indexed_items = False, print_index_summary = True)
 
-	scanner.getClass('EntityScriptingInterface')
+	print(scanner.getClass('EntityScriptingInterface'))
 	# print(scanner.loadClass('EntityScriptingInterface'))
 
 

@@ -1,15 +1,20 @@
 
 import unittest
+import os
 from xml.etree import ElementTree
-from scanner import XmlScanner
+from scanner import XmlScanner, autobuild
 
 
 class TestDoxygenScanner (unittest.TestCase):
-	
 	def testFoo(self):
 		self.assertTrue(True)
 
-	def testGetInnerXml(self):
+	def setUp(self):
+		os.chdir('../../')
+		autobuild()
+		self.scanner = XmlScanner('docs/xml')
+
+	def testInnerXml(self):
 		sample_xml = '''<memberdef kind="variable" id="class_overlays_1acd4d6e1f069b505eb5a4cf81fcb36b9e" prot="private" static="no" mutable="no">
         <type>QMap&lt; unsigned int, <ref refid="class_overlay_1a348ec86ee3beadeff8db130170d6b66a" kindref="member">Overlay::Pointer</ref> &gt;</type>
         <definition>QMap&lt;unsigned int, Overlay::Pointer&gt; Overlays::_overlaysHUD</definition>
@@ -45,6 +50,8 @@ class TestDoxygenScanner (unittest.TestCase):
 			example. Uses Overlay::Pointer.
 			'''.strip())
 
+	def testIndexScan(self):
+		pass
 
 if __name__ == '__main__':
 	unittest.main()

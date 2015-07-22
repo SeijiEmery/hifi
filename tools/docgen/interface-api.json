@@ -9,9 +9,13 @@
 			"js": "Vec3",
 			"cpp": "Vec3",
 			"src": "libraries/script-engine/Vec3.h"
+		},
+		{
+			"js": "MyAvatar",
+			"cpp": "AvatarData",
+			"src": "libraries/avatars/src/AvatarData.h"
 		}
 	],
 	"exposed-objects": [
-	
 	]
 }
