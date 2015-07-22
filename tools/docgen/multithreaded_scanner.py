@@ -41,6 +41,39 @@ def makeReverseLookup(elems):
 		return dict_[key]
 	return lookup
 
+def getInnerXml(node, preserveChildNodes = False, ignoredTags = None):
+	nullGuard = lambda s: s if s is not None else ''
+	def getInnerWithTags(node):
+		if type(node) == str:
+			return node
+		text = nullGuard(node.text) + ''.join(map(getInnerWithTags, node))
+		if ignoredTags and node.tag in ignoredTags:
+			return text
+		attribs = ' %s '%(' '.join([ '%s="%s"'%(k, v) for k, v in node.attrib.iteritems() ])) \
+			if node.attrib else ''
+		return '<%s%s>%s</%s>'%(node.tag, attribs, text, node.tag)
+
+	def getInnerWithoutTags(node):
+		if type(node) == str:
+			return node
+		return nullGuard(node.text) + ''.join(map(getInnerWithoutTags, node))
+
+	if node is None or type(node) == str:
+		return node
+	return nullGuard(node.text) + ''.join(map( ((preserveChildNodes and getInnerWithTags) or getInnerWithoutTags), node))
+
+def getChildNode(node, tag):
+	for child in node.iter(tag):
+		return child
+	return None
+
+def getChildInnerXml(node, tag, **kwargs):
+	return getInnerXml(getChildNode(node, tag), **kwargs)
+
+
+
+
+
 def loadIndex(xmlpath, index_file = 'index.xml'):
 	''' Loads the doxygen index.xml file at index_path, and returns a dict representation
 	of its contents, OR an exception if it fails. '''
@@ -123,7 +156,7 @@ def loadIndex(xmlpath, index_file = 'index.xml'):
 		'enum':  	 'enums',
 		'enumvalue': 'enum_values'
 	})
-	scanUnion     = scanContainer('unions', {
+	scanUnion = scanContainer('unions', {
 		'variable':  'global_variables',
 		'function':  'global_functions',
 		'typedef':   'typedefs',
@@ -135,7 +168,6 @@ def loadIndex(xmlpath, index_file = 'index.xml'):
 		warn("Not parsing %s (%s)"%(_getNodeName(node), node))
 	def ignore(node):
 		pass
-
 	return scanIndex({
 		'struct':    scanClassNode,
 		'class':     scanClassNode,
@@ -157,67 +189,231 @@ print("Test: %s"%fmtHumanReadableList(['foo', 'bar']))
 print("Test: %s"%fmtHumanReadableList(['foo']))
 print("Test: %s"%fmtHumanReadableList([]))
 
-def classParserInfo():
-	member_categories = makeReverseLookup([
-		('exposed_methods', []),
-		('exposed_attribs', ['public-attrib']),
-		('exposed_signals', ['signal']),
-		('exposed_slots', ['public-slot']),
-		('exposed_properties', ['property']),
-		('non_exposed_methods', [
-			'func', 'public-func', 'private-func', 'protected-func', 'package-func',
-			'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func']),
-		('non_exposed_attribs', [
-			'var', 'private-attrib', 'protected-attrib', 'package-attrib',
-			'public-static-attrib', 'private-static-attrib', 'protected-static-attrib', 'package-static-attrib']),
-		('non_exposed_slots', ['private-slot', 'protected-slot']),
-		('non_exposed_signals', []),
-		('non_exposed_properties', []),
-		('unused', [
-			'user-defined', 'typedef', 'public-type', 'private-type', 'package-type', 'protected-type',
-			'dcop-func', 'event', 'friend', 'related', 'define', 'prototype', 'enum'])
-	])
-	def get():
-		return member_categories
-	return get
-classParserInfo = classParserInfo()
+class ClassParser:
+	memberSectionKinds = staticmethod(makeReverseLookup([
+		('methods', ['public-func', 'private-func', 'protected-func',
+			'private-static-func', 'public-static-func', 'protected-static-func',
+			'public-slot', 'private-slot', 'protected-slot', 'signal']),
+		('members', ['public-attrib', 'private-attrib', 'protected-attrib',
+			'public-static-attrib', 'private-static-attrib', 'protected-static-attrib']),
+		('properties', ['property']),
+		('friends', ['friend']),
+		('types', ['public-type', 'private-type', 'protected-type'])
+	]))
 
-def loadCompoundFile(info):
+class NamespaceParser:
+	memberSectionKinds = staticmethod(makeReverseLookup([
+		('vars', ['vars']),
+		('funcs', ['func']),
+		('enums', ['enum']),
+		('typedefs', ['typedef'])
+	]))
+
+class UnionParser:
+	memberSectionKinds = staticmethod(makeReverseLookup([
+		('union_members', ['public-attrib'])
+	]))
+
+class EnumParser:
+	memberSectionKinds = staticmethod(makeReverseLookup([
+
+	]))
+
+def doxybool(val):
+	if val == 'yes':
+		return True
+	if val == 'no':
+		return False
+	return val
+
+def parseParams(node):
+	typeConv = {
+		'declname': 'name',
+		'defname': 'name',
+		'type': 'type',
+		'array': 'type_array',
+		'defval': 'default_value'
+	}
+	def parseParam(param):
+		return dict([ (typeConv[elem.tag], getInnerXml(elem)) for elem in param ])
+	return map(parseParam, node.iter('param'))
+
+def loadClass(info):
+	root = ElementTree.parse(info['xmlpath']).getroot()
+	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid'] ][0]
+
+	print("Loading %s"%(info['refid']))
+	categorize = ClassParser.memberSectionKinds
+	def parseSections(parsers):
+		for section in compound.iter('sectiondef'):
+			cat = categorize(section.attrib['kind'])
+			map(parsers[cat], section.iter('memberdef'))
+	obj = {
+		'members': [],
+		'methods': [],
+		'properties': [],
+		'used-types': [],
+		'references': [],
+		'referencedby': []
+	}
+	def parseVirtual(virt):
+		if virt == 'virtual':
+			return True
+		if virt == 'non-virtual':
+			return False
+		return virt
+
+	def parseMethod(node):
+		name = _getNodeName(node)
+		loc  = getChildNode(node, 'location')
+		method = {
+			'name': name,
+			'kind': node.attrib['kind'],
+			'type': getChildInnerXml(node,'type'),
+			'params': parseParams(node),
+			'const': doxybool(node.attrib['const']),
+			'virtual': parseVirtual(node.attrib['virt']),
+			'prot': doxybool(node.attrib['prot']),
+			'static': doxybool(node.attrib['static']),
+			'inline': doxybool(node.attrib['inline']),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line'],
+			'description': {
+				'brief': getChildInnerXml(node, 'briefdescription', preserveChildNodes=True).strip(),
+				'details': getChildInnerXml(node, 'detaileddescription', preserveChildNodes=True).strip(),
+				'inbody':  getChildInnerXml(node, 'inbodydescription', preserveChildNodes=True).strip()
+			},
+			'references': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			} for ref in node.iter('references')],
+			'referencedby': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref)
+			} for ref in node.iter('referencedby')]
+		}
+		# print(method)
+		obj['methods'].append(method)
+
+	def parseProperty(node):
+		pass
+
+	def tbd(cat, withObjectDump=False):
+		if withObjectDump:
+			def print_(node):
+				print("%s: %s (TBD)\n\t%s"%(cat, node, node.__dict__))
+		else:
+			def print_(node):
+				print("%s: %s (TBD)"%(cat, node))
+		return print_
+
+	internal_types = {}
+	for type_ in compound.iter('type'):
+		# print(type_.__dict__)
+		ref = getChildNode(type_, 'ref')
+		if ref is not None:
+			internal_types[ref.attrib['refid']] = getInnerXml(type_, preserveChildNodes=False)
+	# if internal_types:
+	# print(compound.__dict__)
+	print("\nUsed types: ")
+	for k, v in internal_types.iteritems():
+		print("\t'%s': (%s)"%(v, k))
+	print('\n')
+
+	obj['internal_types'] = internal_types
+
+	parseSections({
+		'methods': parseMethod,
+		'members': tbd('member'),
+		'properties': tbd('property'),
+		'friends': tbd('friend'),
+		'types': tbd('type')
+	})
+
+	all_references = {}
+	all_referencedby = {}
+	for method in obj['methods']:
+		all_references.update(dict([ (ref['refid'], ref['name']) for ref in method['references'] ]))
+		all_referencedby.update(dict([ (ref['refid'], ref['name']) for ref in method['referencedby'] ]))
+
+	print("\nReferences:")
+	for k, v in all_references.iteritems():
+		print("\t'%s': (%s)"%(v, k))
+	print("\nReferenced by:")
+	for k, v in all_referencedby.iteritems():
+		print("\t'%s': (%s)"%(v, k))
+	print('')
+
+
+
+
+
+
+
+	return obj
+
+
+def loadCompoundFile(info, parser):
 	root = ElementTree.parse(info['xmlpath']).getroot()
 
-	def multiplexWithScope(member_type, scope_types):
-		return [ '%s-%s'%(scope, member_type) for scope in scope_types ]
-
-	categorize = makeReverseLookup([
-		('methods', ['func', 'public-func', 'private-func', 'protected-func', 'package-func',
-				'public-static-func', 'private-static-func', 'protected-static-func', 'package-static-func',
-				'signal', 'public-slot', 'private-slot', 'protected-slot']),
-		('members', ['var', 'public-attrib', 'private-attrib', 'protected-attrib', 'package-attrib']),
-		('properties', ['property']),
-		('typedefs', ['typedef']),
-		('enums', ['enum']),
-		('unused', ['user-defined', 'public-type', 'private-type', 'package-type', 'protected-type',
-			'dcop-func', 'event', 'friend', 'related', 'define', 'prototype'])
-	])
-
-	def parseSections(section_parsers):
+	categorize = parser.memberSectionKinds
+	def parseSections(parsers):
 		for section in root.iter('sectiondef'):
-			map(section_parsers[categorize(section.attrib['kind'])], section.iter('memberdef'))
+			map(parsers[categorize(section.attrib['kind'])], section.iter('memberdef'))
 
 	def printAs(type_):
 		def print_(node):
 			print("%s: %s"%(type_, node))
 		return print_
 
+	def printWithDump(type_):
+		def print_(node):
+			print("%s: %s %s"%(type_, node, node.__dict__))
+		return print_
+
+	def parseClassMethod(node):
+		pass
+
+	def parseClassMember(node):
+		pass
+
+	def parseClassProperty(node):
+		pass
+
+	def parseClassFriend(node):
+		pass
+
+	def parseClassInnerType(node):
+		pass
+
+	def parseNamespaceVar(node):
+		pass
+
+	def parseNamespaceFunc(node):
+		pass
+
+	def parseNamespaceEnum(node):
+		pass
+
+	def parseNamespaceTypedef(node):
+		pass
+
+	def parseUnionMember(node):
+		pass
 
 	parseSections({
-		'methods': printAs("method"),
-		'members': printAs("member"),
-		'properties': printAs("property"),
-		'typedefs': printAs("typedef"),
-		'enums': printAs("enum"),
-		'unused': printAs("unused")
-		})
+		'methods': parseClassMethod,
+		'members': parseClassMember,
+		'properties': parseClassProperty,
+		'friends': parseClassFriend,
+		'types':   parseClassInnerType,
+		'vars': parseNamespaceVar,
+		'funcs': parseNamespaceFunc,
+		'enums': parseNamespaceEnum,
+		'typedefs': parseNamespaceTypedef,
+		'union_members': parseUnionMember
+	})
 
 
 
@@ -239,6 +435,13 @@ class DoxygenScanner(object):
 		self.loaded_items = {}
 		self.scanned_scriptable_items = {}
 		self.xmlpath = xmlpath
+		self.compoundParsers = {
+			'class': ClassParser,
+			'struct': ClassParser,
+			'namespace': NamespaceParser,
+			'enum':	EnumParser,
+			'union': UnionParser
+		}
 
 	def loadIndex(self):
 		if not self.index or not self.name_lookup or not self.cat_lookup:
@@ -296,7 +499,19 @@ class DoxygenScanner(object):
 		return [ self.scanned_scriptable_items[refid] for refid in refids ]
 
 	def loadItem(self, refid):
-		r = loadCompoundFile(self.index[refid])
+		item = self.index[refid]
+
+		loaders = {
+			'class': loadClass,
+			'struct': loadClass,
+			# 'namespace': loadNamespace,
+			# 'enum': loadEnum,
+			# 'union': loadUnion
+		}
+		if not item['kind'] in loaders:
+			print("ERROR: Don't know how to load '%s'"%item['kind'])
+			return
+		r = loaders[item['kind']](item)
 		self.loaded_items[refid] = None
 
 	def scanForScriptableItem(self, refid):
@@ -344,6 +559,8 @@ class DoxygenScanner(object):
 		return section_kinds
 
 	def debugGetSectionKindsForProject(self):
+		''' Debug utility that scans all project files in category XYZ and prints out the section-types (kinds)
+		that they use. Used to implement loadCompoundFile more efficiently. '''
 		self.loadIndex()
 		cats = [ 'classes', 'namespaces', 'unions', 'enums' ]
 		for cat in cats:
@@ -351,6 +568,51 @@ class DoxygenScanner(object):
 			for kind in self.getUsedSectionsByType(cat):
 				print("\t%s"%kind)
 			print('')
+
+	def debugPrintParamInnerTags(self):
+		self.loadIndex()
+
+		member_param_tags = {}
+		member_tag_examples = {}
+
+		parsed_files = 0
+		for cls in self.cat_lookup['classes']:
+			if not cls in self.index:
+				print("Missing refid: %s (%s)"%(refid, "class"))
+				continue
+			root = ElementTree.parse(self.index[cls]['xmlpath'])
+			matching_compounds = [ node for node in root.iter('compounddef') if node.attrib['id'] == cls ]
+			if len(matching_compounds) != 1:
+				print("Bad file: %s (%s)"%(cls, self.index[cls]['kind']))
+				continue
+			parsed_files += 1
+			compound = matching_compounds[0]
+			for section in compound.iter('sectiondef'):
+				for member in section.iter('memberdef'):
+					if not member.attrib['kind'] in member_param_tags:
+						member_param_tags[member.attrib['kind']] = set()
+					for param in member.iter('param'):
+						for elem in param:
+							member_param_tags[member.attrib['kind']].add(elem.tag)
+						fmt = '%s: '%(section.attrib['kind'])
+						fmt += ', '.join([ elem.tag for elem in param ])
+						if not fmt in member_tag_examples:
+							member_tag_examples[fmt] = getInnerXml(param, preserveChildNodes = True).strip() + '\n\t' + \
+								getChildInnerXml(member, 'definition') + getChildInnerXml(member, 'argsstring')
+
+		print("Parsed %d / %d files"%(parsed_files, len(self.cat_lookup['classes'])))
+
+		print("Class/struct param tags by section:")
+		for k, v in member_param_tags.iteritems():
+			print("section '%s': %s"%(k, ', '.join(v)))
+		print("Examples:\n")
+		for k, v in member_tag_examples.iteritems():
+			print("%s\n\t%s"%(k, v))
+
+
+
+
+
 
 def autobuild ():
 	''' Runs doxygen if the documentation has not already been built. '''
@@ -371,8 +633,13 @@ if __name__ == '__main__':
 
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
-	# scanner.getScriptableInfo(['EntityScriptingInterface'])
-	scanner.debugGetSectionKindsForProject()
+	# scanner.debugPrintParamInnerTags()
+	print("scanner.scanType('Application')")
+	print(scanner.getScriptableInfo(["Application"]))
+	print("scanner.scanType('EntityScriptingInterface')")
+	scanner.getScriptableInfo(['EntityScriptingInterface'])
+
+	# scanner.debugGetSectionKindsForProject()
 
 
 
