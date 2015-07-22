@@ -238,7 +238,7 @@ def parseParams(node):
 		return dict([ (typeConv[elem.tag], getInnerXml(elem)) for elem in param ])
 	return map(parseParam, node.iter('param'))
 
-def loadClass(info):
+def loadClass(info, traceTypeInfo=False):
 	root = ElementTree.parse(info['xmlpath']).getroot()
 	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid'] ][0]
 
@@ -249,12 +249,21 @@ def loadClass(info):
 			cat = categorize(section.attrib['kind'])
 			map(parsers[cat], section.iter('memberdef'))
 	obj = {
+		'name': info['name'],
+		'kind': info['kind'],
+		'refid': info['refid'],
 		'members': [],
 		'methods': [],
 		'properties': [],
-		'used-types': [],
-		'references': [],
-		'referencedby': []
+		# 'used-types': [],
+		# 'references': [],
+		# 'referencedby': [],
+		'friends': [],
+		'description': {
+			'brief': getChildInnerXml(compound, 'briefdescription', preserveChildNodes=True).strip(),
+			'details': getChildInnerXml(compound, 'detaileddescription', preserveChildNodes=True).strip(),
+			'inbody':  getChildInnerXml(compound, 'inbodydescription', preserveChildNodes=True).strip()
+		}
 	}
 	def parseVirtual(virt):
 		if virt == 'virtual':
@@ -268,6 +277,7 @@ def loadClass(info):
 		loc  = getChildNode(node, 'location')
 		method = {
 			'name': name,
+			'refid': node.attrib['id'],
 			'kind': node.attrib['kind'],
 			'type': getChildInnerXml(node,'type'),
 			'params': parseParams(node),
@@ -296,8 +306,53 @@ def loadClass(info):
 		# print(method)
 		obj['methods'].append(method)
 
+	def parseMember(node):
+		# print(node.__dict__)
+		name = _getNodeName(node)
+		loc = getChildNode(node, 'location')
+		member = {
+			'name': name,
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'type': getChildInnerXml(node, 'type'),
+			# 'const': doxybool(node.attrib['const']),
+			'mutable': doxybool(node.attrib['mutable']),
+			'static': doxybool(node.attrib['static']),
+			# 'inline': doxybool(node.attrib['inline']),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line'],
+			'description': {
+				'brief':   getChildInnerXml(node, 'briefdescription', preserveChildNodes=True).strip(),
+				'details': getChildInnerXml(node, 'detaileddescription', preserveChildNodes=True).strip(),
+				'inbody':  getChildInnerXml(node, 'inbodydescription', preserveChildNodes=True).strip()
+			},
+			'references': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			} for ref in node.iter('references')],
+			'referencedby': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref)
+			} for ref in node.iter('referencedby')]
+		}
+		# print(member)
+		obj['members'].append(member)
+
 	def parseProperty(node):
 		pass
+
+	def parseInternalType(node):
+		print("INTERNAL TYPE")
+		print("%s %s")%(node, node.__dict__)
+
+	def parseFriend(node):
+		# print("%s %s")%(node, node.__dict__)
+		obj['friends'].append({
+			'refid': node.attrib['id'],
+			'name': _getNodeName(node)
+		})
+		# print(obj['friends'][-1])
 
 	def tbd(cat, withObjectDump=False):
 		if withObjectDump:
@@ -314,110 +369,39 @@ def loadClass(info):
 		ref = getChildNode(type_, 'ref')
 		if ref is not None:
 			internal_types[ref.attrib['refid']] = getInnerXml(type_, preserveChildNodes=False)
-	# if internal_types:
-	# print(compound.__dict__)
-	print("\nUsed types: ")
-	for k, v in internal_types.iteritems():
-		print("\t'%s': (%s)"%(v, k))
-	print('\n')
 
 	obj['internal_types'] = internal_types
 
 	parseSections({
 		'methods': parseMethod,
-		'members': tbd('member'),
+		'members': parseMember,
 		'properties': tbd('property'),
-		'friends': tbd('friend'),
-		'types': tbd('type')
+		'friends': parseFriend,
+		'types': parseInternalType
 	})
 
-	all_references = {}
-	all_referencedby = {}
-	for method in obj['methods']:
-		all_references.update(dict([ (ref['refid'], ref['name']) for ref in method['references'] ]))
-		all_referencedby.update(dict([ (ref['refid'], ref['name']) for ref in method['referencedby'] ]))
+	print("Parsed %s %s (%s)"%(obj['kind'], obj['name'], obj['refid']))
+	print("Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties']  ]))
 
-	print("\nReferences:")
-	for k, v in all_references.iteritems():
-		print("\t'%s': (%s)"%(v, k))
-	print("\nReferenced by:")
-	for k, v in all_referencedby.iteritems():
-		print("\t'%s': (%s)"%(v, k))
-	print('')
-
-
-
-
-
-
-
+	if traceTypeInfo:
+		print("\nUsed types: ")
+		for k, v in internal_types.iteritems():
+			print("\t'%s': (%s)"%(v, k))
+		print('\n')
+		all_references = {}
+		all_referencedby = {}
+		for method in obj['methods']:
+			all_references.update(dict([ (ref['refid'], ref['name']) for ref in method['references'] ]))
+			all_referencedby.update(dict([ (ref['refid'], ref['name']) for ref in method['referencedby'] ]))
+	
+		print("\nReferences:")
+		for k, v in all_references.iteritems():
+			print("\t'%s': (%s)"%(v, k))
+		print("\nReferenced by:")
+		for k, v in all_referencedby.iteritems():
+			print("\t'%s': (%s)"%(v, k))
+		print('')
 	return obj
-
-
-def loadCompoundFile(info, parser):
-	root = ElementTree.parse(info['xmlpath']).getroot()
-
-	categorize = parser.memberSectionKinds
-	def parseSections(parsers):
-		for section in root.iter('sectiondef'):
-			map(parsers[categorize(section.attrib['kind'])], section.iter('memberdef'))
-
-	def printAs(type_):
-		def print_(node):
-			print("%s: %s"%(type_, node))
-		return print_
-
-	def printWithDump(type_):
-		def print_(node):
-			print("%s: %s %s"%(type_, node, node.__dict__))
-		return print_
-
-	def parseClassMethod(node):
-		pass
-
-	def parseClassMember(node):
-		pass
-
-	def parseClassProperty(node):
-		pass
-
-	def parseClassFriend(node):
-		pass
-
-	def parseClassInnerType(node):
-		pass
-
-	def parseNamespaceVar(node):
-		pass
-
-	def parseNamespaceFunc(node):
-		pass
-
-	def parseNamespaceEnum(node):
-		pass
-
-	def parseNamespaceTypedef(node):
-		pass
-
-	def parseUnionMember(node):
-		pass
-
-	parseSections({
-		'methods': parseClassMethod,
-		'members': parseClassMember,
-		'properties': parseClassProperty,
-		'friends': parseClassFriend,
-		'types':   parseClassInnerType,
-		'vars': parseNamespaceVar,
-		'funcs': parseNamespaceFunc,
-		'enums': parseNamespaceEnum,
-		'typedefs': parseNamespaceTypedef,
-		'union_members': parseUnionMember
-	})
-
-
-
-
 
 def scanScriptableness(item):
 	pass
@@ -569,6 +553,27 @@ class DoxygenScanner(object):
 				print("\t%s"%kind)
 			print('')
 
+	def debugFindThingWithProperties(self):
+		self.loadIndex()
+
+		min_properties = 0
+
+		for cls in self.cat_lookup['classes']:
+			if not cls in self.index:
+				print("Missing refid: %s (%s)"%(refid, "calss"))
+				continue
+			root = ElementTree.parse(self.index[cls]['xmlpath'])
+			matching_compounds = [ node for node in root.iter('compounddef') if node.attrib['id'] == cls ]
+			if len(matching_compounds) != 1:
+				print("Bad file: %s (%s)"%(cls, self.index[cls]['kind']))
+				continue
+			compound = matching_compounds[0]
+			num_properties = len(list(compound.iter('properties')))
+			if num_properties > min_properties:
+				print("Found file %s with %d properties: "%(self.index[cls]['xmlpath'], num_properties))
+
+		# OKAAAAAY... We don't have any properties XD
+
 	def debugPrintParamInnerTags(self):
 		self.loadIndex()
 
@@ -633,6 +638,8 @@ if __name__ == '__main__':
 
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
+
+	# scanner.debugFindThingWithProperties()
 	# scanner.debugPrintParamInnerTags()
 	print("scanner.scanType('Application')")
 	print(scanner.getScriptableInfo(["Application"]))
