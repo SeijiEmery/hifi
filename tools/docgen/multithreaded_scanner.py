@@ -70,10 +70,6 @@ def getChildNode(node, tag):
 def getChildInnerXml(node, tag, **kwargs):
 	return getInnerXml(getChildNode(node, tag), **kwargs)
 
-
-
-
-
 def loadIndex(xmlpath, index_file = 'index.xml'):
 	''' Loads the doxygen index.xml file at index_path, and returns a dict representation
 	of its contents, OR an exception if it fails. '''
@@ -238,11 +234,23 @@ def parseParams(node):
 		return dict([ (typeConv[elem.tag], getInnerXml(elem)) for elem in param ])
 	return map(parseParam, node.iter('param'))
 
-def loadClass(info, traceTypeInfo=False):
+def getDescription(node):
+	def getDescriptionLine(descrip):
+		if getChildNode(node, descrip):
+			return getChildInnerXml(node, descrip, preserveChildNodes=True).strip()
+		return ''
+	return {
+		'brief': getDescriptionLine('briefdescription'),
+		'details': getDescriptionLine('detaileddescription'),
+		'inbody': getDescriptionLine('inbodydescription')
+	}
+
+def loadClass(info, traceTypeInfo=False, printSummary=True):
 	root = ElementTree.parse(info['xmlpath']).getroot()
 	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid'] ][0]
 
-	print("Loading %s"%(info['refid']))
+	if printSummary:
+		print("Loading %s"%(info['refid']))
 	categorize = ClassParser.memberSectionKinds
 	def parseSections(parsers):
 		for section in compound.iter('sectiondef'):
@@ -259,11 +267,7 @@ def loadClass(info, traceTypeInfo=False):
 		# 'references': [],
 		# 'referencedby': [],
 		'friends': [],
-		'description': {
-			'brief': getChildInnerXml(compound, 'briefdescription', preserveChildNodes=True).strip(),
-			'details': getChildInnerXml(compound, 'detaileddescription', preserveChildNodes=True).strip(),
-			'inbody':  getChildInnerXml(compound, 'inbodydescription', preserveChildNodes=True).strip()
-		}
+		'description': getDescription(compound)
 	}
 	def parseVirtual(virt):
 		if virt == 'virtual':
@@ -288,11 +292,7 @@ def loadClass(info, traceTypeInfo=False):
 			'inline': doxybool(node.attrib['inline']),
 			'file': loc.attrib['file'],
 			'line': loc.attrib['line'],
-			'description': {
-				'brief': getChildInnerXml(node, 'briefdescription', preserveChildNodes=True).strip(),
-				'details': getChildInnerXml(node, 'detaileddescription', preserveChildNodes=True).strip(),
-				'inbody':  getChildInnerXml(node, 'inbodydescription', preserveChildNodes=True).strip()
-			},
+			'description': getDescription(node),
 			'references': [{
 				'refid': ref.attrib['refid'],
 				'name': getInnerXml(ref),
@@ -321,11 +321,7 @@ def loadClass(info, traceTypeInfo=False):
 			# 'inline': doxybool(node.attrib['inline']),
 			'file': loc.attrib['file'],
 			'line': loc.attrib['line'],
-			'description': {
-				'brief':   getChildInnerXml(node, 'briefdescription', preserveChildNodes=True).strip(),
-				'details': getChildInnerXml(node, 'detaileddescription', preserveChildNodes=True).strip(),
-				'inbody':  getChildInnerXml(node, 'inbodydescription', preserveChildNodes=True).strip()
-			},
+			'description': getDescription(node),
 			'references': [{
 				'refid': ref.attrib['refid'],
 				'name': getInnerXml(ref),
@@ -380,8 +376,9 @@ def loadClass(info, traceTypeInfo=False):
 		'types': parseInternalType
 	})
 
-	print("Parsed %s %s (%s)"%(obj['kind'], obj['name'], obj['refid']))
-	print("Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties']  ]))
+	if printSummary:
+		print("\nParsed %s %s (%s)\n%s\n"%(obj['kind'], obj['name'], obj['refid'],
+			  "Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties']])))
 
 	if traceTypeInfo:
 		print("\nUsed types: ")
@@ -405,6 +402,31 @@ def loadClass(info, traceTypeInfo=False):
 
 def scanScriptableness(item):
 	pass
+
+def loadAnything(stuff):
+	print("ENTER %s"%(stuff['refid']))
+	print("%d / %d: %f%%"%(stuff['k'], stuff['n'], float(stuff['k']) / float(stuff['n']) * 100.0))
+	try:
+		if stuff['kind'] == 'class' or stuff['kind'] == 'struct':
+			rs = loadClass(stuff)
+		elif stuff['kind'] == 'namespace':
+			print("Loading namespaces not yet implemented")
+			rs = stuff
+		elif stuff['kind'] == 'union':
+			print("Loading unions not yet implemented")
+			rs = stuff
+		elif stuff['kind'] == 'enum':
+			print("Loading enums not yet implemented")
+			rs = stuff
+		else:
+			print("Cant load '%s'"%(stuff['kind']))
+			return stuff
+	except Exception as error:
+		print(error)
+		print("EXIT %s"%(stuff['refid']))
+		return rs
+	print("EXIT %s"%(stuff['refid']))
+	return rs
 
 
 class DoxygenScanner(object):
@@ -572,7 +594,7 @@ class DoxygenScanner(object):
 			if num_properties > min_properties:
 				print("Found file %s with %d properties: "%(self.index[cls]['xmlpath'], num_properties))
 
-		# OKAAAAAY... We don't have any properties XD
+		# OKAAAAAY... We don't have any properties in our codebase XD
 
 	def debugPrintParamInnerTags(self):
 		self.loadIndex()
@@ -614,7 +636,38 @@ class DoxygenScanner(object):
 		for k, v in member_tag_examples.iteritems():
 			print("%s\n\t%s"%(k, v))
 
+	def loadEverything(self):
+		try:
+			scanner.loadIndex()
+			pool = Pool(processes=32)
+			classes = self.cat_lookup['classes']
+			namespaces = self.cat_lookup['namespaces']
+			enums = self.cat_lookup['enums']
+			unions = self.cat_lookup['unions']
+			everything = classes + namespaces + enums + unions
+			print(everything)
+			print(len(everything))
 
+			things = [ self.index[thing] for thing in everything if thing in self.index ]
+			print(len(things))
+
+			for i, thing in enumerate(things):
+				thing['k'] = i
+				thing['n'] = len(things)
+
+			# rs = map(loadAnything, things)
+			rs = pool.map(loadAnything, things)
+			pool.close()
+			pool.join()
+			print("Finished")
+			# output = [ tmp.get() for tmp in rs ]
+			print(len(rs))
+			for r in rs:
+				self.loaded_items[r['refid']] = r
+		except Exception as e:
+			print("EARLY EXIT")
+			print(e)
+		print("Done")
 
 
 
@@ -639,12 +692,14 @@ if __name__ == '__main__':
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
 
+	scanner.loadEverything()
+
 	# scanner.debugFindThingWithProperties()
 	# scanner.debugPrintParamInnerTags()
-	print("scanner.scanType('Application')")
-	print(scanner.getScriptableInfo(["Application"]))
-	print("scanner.scanType('EntityScriptingInterface')")
-	scanner.getScriptableInfo(['EntityScriptingInterface'])
+	# print("scanner.scanType('Application')")
+	# print(scanner.getScriptableInfo(["Application"]))
+	# print("scanner.scanType('EntityScriptingInterface')")
+	# scanner.getScriptableInfo(['EntityScriptingInterface'])
 
 	# scanner.debugGetSectionKindsForProject()
 
