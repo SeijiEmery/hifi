@@ -2,7 +2,11 @@
 import os.path
 from multiprocessing import Pool, Queue
 from xml.etree import ElementTree
+import traceback
 import re
+
+USE_MULTITHREADING = True
+
 
 class ConditionalTask(object):
 	def __init__(self, task, runCondition, *args):
@@ -113,11 +117,13 @@ def loadIndex(xmlpath, index_file = 'index.xml'):
 			name, refid = _getNodeName(node), node.attrib['refid']
 			ref = {
 				'xmlpath': os.path.join(xmlpath, refid + '.xml'),
+				'parent':  None,
 				'refid':   refid,
 				'kind':    node.attrib['kind'],
 				'name':	   _getNodeName(node),
 				'members': dict([ (member.attrib['refid'], {
 						'refid': member.attrib['refid'],
+						'parent': refid,
 						'name':  name + '::' + _getNodeName(member),
 						'kind':  member.attrib['kind']
 					}) for member in node.iter('member') ])
@@ -180,10 +186,10 @@ def fmtHumanReadableList(li):
 		return ', '.join(li[:-1]) + ', and ' + li[-1]
 	return ' and '.join(li) if li else '[]'; 
 
-print("Test: %s"%fmtHumanReadableList(['foo', 'bar', 'baz']))
-print("Test: %s"%fmtHumanReadableList(['foo', 'bar']))
-print("Test: %s"%fmtHumanReadableList(['foo']))
-print("Test: %s"%fmtHumanReadableList([]))
+# print("Test: %s"%fmtHumanReadableList(['foo', 'bar', 'baz']))
+# print("Test: %s"%fmtHumanReadableList(['foo', 'bar']))
+# print("Test: %s"%fmtHumanReadableList(['foo']))
+# print("Test: %s"%fmtHumanReadableList([]))
 
 class ClassParser:
 	memberSectionKinds = staticmethod(makeReverseLookup([
@@ -199,7 +205,7 @@ class ClassParser:
 
 class NamespaceParser:
 	memberSectionKinds = staticmethod(makeReverseLookup([
-		('vars', ['vars']),
+		('vars', ['var']),
 		('funcs', ['func']),
 		('enums', ['enum']),
 		('typedefs', ['typedef'])
@@ -245,7 +251,206 @@ def getDescription(node):
 		'inbody': getDescriptionLine('inbodydescription')
 	}
 
-def loadClass(info, traceTypeInfo=False, printSummary=True):
+def parseEnum(node):
+	# for value in node.iter('enumvalue'):
+	# 	print('%s: %s'%(_getNodeName(value), value.__dict__))
+	loc = getChildNode(node, 'location')
+	enum =  {
+		'name': _getNodeName(node),
+		'refid': node.attrib['id'],
+		'kind': node.attrib['kind'],
+		'prot': node.attrib['prot'],
+		'values': [{
+			'name': _getNodeName(value),
+			'refid': value.attrib['id'],
+			'initializer': getChildInnerXml(value, 'initializer'),
+			'description': getDescription(value),
+			# 'file': getChildNode(value, 'location').attrib['file'] if getChildNode(value, 'location') else None,
+			# 'line': getChildNode(value, 'location').attrib['line'] if getChildNode(value, 'location') else None,
+		} for value in node.iter('enumvalue')],
+		'description': getDescription(node),
+		# 'file': loc.attrib['file'] if loc else None,
+		# 'line': loc.attrib['line'] if loc else None
+	}
+	# print(enum)
+	return enum
+
+def parseTypedef(node):
+	# print("TYPEDEF %s: %s"%(node, node.__dict__))
+	return {
+		'name': _getNodeName(node),
+		'refid': node.attrib['id'],
+		'prot': node.attrib['prot'],
+		'type': getChildInnerXml(node, 'type'),
+		'description': getDescription(node)
+	}
+
+def loadUnion(info, traceTypeInfo=False, printSummary=False):
+	# print(info)
+	root = ElementTree.parse(info['xmlpath']).getroot()
+	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid']][0]
+	if printSummary:
+		print("Loading %s"%(info['refid']))
+	# print("%s %s")%(compound, compound.__dict__)
+	categorize = UnionParser.memberSectionKinds
+	def parseSections(parsers):
+		for section in compound.iter('sectiondef'):
+			cat = categorize(section.attrib['kind'])
+			map(parsers[cat], section.iter('memberdef'))
+	obj = {
+		'name': info['name'],
+		'kind': info['kind'],
+		'refid': info['refid'],
+		'members': [],
+		'description': getDescription(compound)
+	}
+	def parseMember(node):
+		# print("UNION MEMBER %s: %s"%(node, node.__dict__))
+		loc = getChildNode(node, 'location')
+		obj['members'].append({
+			'name': _getNodeName(node),
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'prot': node.attrib['prot'],
+			'type': getChildInnerXml(node, 'type', preserveChildNodes=True),
+			'description': getDescription(node),
+			'references': dict([(ref.attrib['refid'], {
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			}) for ref in node.iter('references')]),
+			'referencedby': dict([(
+				ref.attrib['refid'],
+				getInnerXml(ref)
+			) for ref in node.iter('referencedby')]),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line']
+		})
+		# print(obj['members'][-1])
+
+	parseSections({
+		'union_members': parseMember
+	})
+	obj['references']   = {}
+	obj['referencedby'] = {}
+	for member in obj['members']:
+		obj['references'].update(member['references'])
+		obj['referencedby'].update(member['referencedby'])
+
+	if traceTypeInfo:
+		obj['used_types'] = set()
+		for member in obj['members']:
+			obj['used_types'].add(member['type'])
+
+
+	if printSummary:
+		s = "Union %s (%s)"%(obj['name'], obj['refid'])
+		s += "\nhas %d reference(s):"%(len(obj['references']))
+		for k, v in obj['references'].iteritems():
+			s += '\n\t%s: %s'%(k, v) 
+		s += "\nis referenced by %d:"%(len(obj['references']))
+		for k, v in obj['referencedby'].iteritems():
+			s += '\n\t%s: %s'%(k, v) 
+		if traceTypeInfo:
+			s += "\nuses %d type(s):"%(len(obj['used_types']))
+			for t in obj['used_types']:
+				s += '\n\t%s'%(t)
+		print(s)
+	return obj
+
+
+def loadNamespace(info, traceTypeInfo=False, printSummary=False):
+	root = ElementTree.parse(info['xmlpath']).getroot()
+	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid']][0]
+	if printSummary:
+		print("Loading %s"%(info['refid']))
+	categorize = NamespaceParser.memberSectionKinds
+	def parseSections(parsers):
+		for section in compound.iter('sectiondef'):
+			# print("GOT NAMESPACE SECTION %s"%(section.attrib['kind']))
+			cat = categorize(section.attrib['kind'])
+			map(parsers[cat], section.iter('memberdef'))
+	ns = {
+		'name': info['name'],
+		'kind': info['kind'],
+		'refid': info['refid'],
+		'vars': [],
+		'functions': [],
+		'enums': [],
+		'typedefs': [],
+		'description': getDescription(compound)
+	}
+	
+	def parseFunc(node):
+		name = _getNodeName(node)
+		loc  = getChildNode(node, 'location')
+		ns['functions'].append({
+			'name': name,
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'type': getChildInnerXml(node,'type'),
+			'params': parseParams(node),
+			'const': doxybool(node.attrib['const']),
+			'prot': doxybool(node.attrib['prot']),
+			'inline': doxybool(node.attrib['inline']),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line'],
+			'description': getDescription(node),
+			'references': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			} for ref in node.iter('references')],
+			'referencedby': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref)
+			} for ref in node.iter('referencedby')]
+		})
+
+	def parseVar(node):
+		name = _getNodeName(node)
+		loc = getChildNode(node, 'location')
+		ns['vars'].append({
+			'name': name,
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'type': getChildInnerXml(node, 'type'),
+			# 'const': doxybool(node.attrib['const']),
+			'mutable': doxybool(node.attrib['mutable']),
+			'static': doxybool(node.attrib['static']),
+			# 'inline': doxybool(node.attrib['inline']),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line'],
+			'description': getDescription(node),
+			'references': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			} for ref in node.iter('references')],
+			'referencedby': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref)
+			} for ref in node.iter('referencedby')]
+		})
+
+	def nsParseEnum(node):
+		ns['enums'].append(parseEnum(node))
+	def nsParseTypedef(node):
+		ns['typedefs'].append(parseTypedef(node))
+	
+	parseSections({
+		'vars': parseVar,
+		'funcs': parseFunc,
+		'enums': nsParseEnum,
+		'typedefs': nsParseTypedef
+	})
+
+	if printSummary:
+		print("\nParsed %s %s (%s)\n%s\n"%(ns['kind'], ns['name'], ns['refid'],
+			  "Has " + fmtHumanReadableList([ '%d %s'%(len(ns[k]), k) for k in ['vars', 'functions', 'enums', 'typedefs']])))
+	return ns
+
+
+def loadClass(info, traceTypeInfo=False, printSummary=False):
 	root = ElementTree.parse(info['xmlpath']).getroot()
 	compound = [ node for node in root.iter('compounddef') if node.attrib['id'] == info['refid'] ][0]
 
@@ -295,15 +500,14 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 			'file': loc.attrib['file'],
 			'line': loc.attrib['line'],
 			'description': getDescription(node),
-			'references': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref),
-				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
-			} for ref in node.iter('references')],
-			'referencedby': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref)
-			} for ref in node.iter('referencedby')]
+			'references': dict([(
+				ref.attrib['refid'],
+				{ 'name': getInnerXml(ref), 'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else '' }
+			) for ref in node.iter('references')]),
+			'referencedby': dict([(
+				ref.attrib['refid'],
+				getInnerXml(ref)
+			) for ref in node.iter('referencedby')])
 		}
 		# print(method)
 		obj['methods'].append(method)
@@ -324,15 +528,14 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 			'file': loc.attrib['file'],
 			'line': loc.attrib['line'],
 			'description': getDescription(node),
-			'references': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref),
-				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
-			} for ref in node.iter('references')],
-			'referencedby': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref)
-			} for ref in node.iter('referencedby')]
+			'references': dict([(
+				ref.attrib['refid'],
+				{ 'name': getInnerXml(ref), 'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else '' }
+			) for ref in node.iter('references')]),
+			'referencedby': dict([(
+				ref.attrib['refid'],
+				getInnerXml(ref)
+			) for ref in node.iter('referencedby')])
 		}
 		# print(member)
 		obj['members'].append(member)
@@ -352,15 +555,14 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 			'type': getChildInnerXml(node, 'type'),
 			'file': loc.attrib['file'],
 			'line': loc.attrib['line'],
-			'references': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref),
-				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
-			} for ref in node.iter('references')],
-			'referencedby': [{
-				'refid': ref.attrib['refid'],
-				'name': getInnerXml(ref)
-			} for ref in node.iter('referencedby')]
+			'references': dict([(
+				ref.attrib['refid'],
+				{ 'name': getInnerXml(ref), 'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else '' }
+			) for ref in node.iter('references')]),
+			'referencedby': dict([(
+				ref.attrib['refid'],
+				getInnerXml(ref)
+			) for ref in node.iter('referencedby')])
 		})
 		# print("PROPERTY")
 		# print(obj['properties'][-1])
@@ -369,40 +571,11 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 		# print("WRITE: %s"%(getChildNode(node, 'write') is not None and getChildNode(node, 'write').__dict__))
 		# pass
 
-	def parseEnum(node, name):
-		# for value in node.iter('enumvalue'):
-		# 	print('%s: %s'%(_getNodeName(value), value.__dict__))
-		return {
-			'name': _getNodeName(node),
-			'refid': node.attrib['id'],
-			'kind': node.attrib['kind'],
-			'prot': node.attrib['prot'],
-			'values': [{
-				'name': _getNodeName(value),
-				'refid': value.attrib['id'],
-				'initializer': getChildInnerXml(value, 'initializer'),
-				'description': getDescription(value)
-			} for value in node.iter('enumvalue')],
-			'description': getDescription(node)
-		}
-		# print(name)
-	def parseTypedef(node):
-		# print("TYPEDEF %s: %s"%(node, node.__dict__))
-		return {
-			'name': _getNodeName(node),
-			'refid': node.attrib['id'],
-			'prot': node.attrib['prot'],
-			'type': getChildInnerXml(node, 'type'),
-			'description': getDescription(node)
-		}
-
-
-
 	def parseInternalType(node):
 		# print("INTERNAL TYPE")
 		if node.attrib['kind'] == 'enum':
 			# print("%s %s")%(node, node.__dict__)
-			obj['enums'].append(parseEnum(node, obj['name'] + '::' + _getNodeName(node)))
+			obj['enums'].append(parseEnum(node))#, obj['name'] + '::' + _getNodeName(node)))
 			# print("%s = %s")%(obj['name'] + '::' + _getNodeName(node), obj['enums'][-1])
 		elif node.attrib['kind'] == 'typedef':
 			# print("%s %s")%(node, node.__dict__)
@@ -412,7 +585,6 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 			print("UNKNOWN KIND %s"%(node.attrib['kind']))
 			print("%s %s")%(node, node.__dict__)
 			
-
 	def parseFriend(node):
 		# print("%s %s")%(node, node.__dict__)
 		obj['friends'].append({
@@ -447,6 +619,22 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 		'types': parseInternalType
 	})
 
+	obj['calls'] = {}
+	obj['called_by'] = {}
+	for method in obj['methods']:
+		obj['calls'].update(method['references'])
+		obj['called_by'].update(method['referencedby'])
+	if traceTypeInfo:
+		obj['used_types'] = set()
+		for method in obj['methods']:
+			obj['used_types'].add(method['type'])
+		for member in obj['members']:
+			obj['used_types'].add(member['type'])
+		for prop in obj['properties']:
+			obj['used_types'].add(prop['type'])
+		for t in obj['typedefs']:
+			obj['used_types'].add(t['type'])
+
 	if printSummary:
 		print("\nParsed %s %s (%s)\n%s\n"%(obj['kind'], obj['name'], obj['refid'],
 			  "Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties', 'enums', 'typedefs']])))
@@ -454,63 +642,72 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 	# print(getChildInnerXml(compound, 'basecompoundref', preserveChildNodes=True))
 	# print(getChildInnerXml(compound, 'inheritancegraph', preserveChildNodes=True) if getChildNode(compound, 'inheritancegraph') else "NO INHERITANCE") 
 
-	if traceTypeInfo:
-		print("\nUsed types: ")
-		for k, v in internal_types.iteritems():
-			print("\t'%s': (%s)"%(v, k))
-		print('\n')
-		all_references = {}
-		all_referencedby = {}
-		for method in obj['methods']:
-			all_references.update(dict([ (ref['refid'], ref['name']) for ref in method['references'] ]))
-			all_referencedby.update(dict([ (ref['refid'], ref['name']) for ref in method['referencedby'] ]))
+	if printSummary:
+		s = "Class %s (%s)"%(obj['name'], obj['refid'])
+		s += "\nhas %d reference(s):"%(len(obj['calls']))
+		for k, v in obj['calls'].iteritems():
+			s += '\n\t%s: %s'%(k, v) 
+		s += "\nis referenced by %d:"%(len(obj['called_by']))
+		for k, v in obj['called_by'].iteritems():
+			s += '\n\t%s: %s'%(k, v) 
+		if traceTypeInfo:
+			s += "\nuses %d type(s):"%(len(obj['used_types']))
+			for t in obj['used_types']:
+				s += '\n\t%s'%(t)
+		print(s)
+	# if traceTypeInfo:
+	# 	print("\nUsed types: ")
+	# 	for k, v in internal_types.iteritems():
+	# 		print("\t'%s': (%s)"%(v, k))
+	# 	print('\n')
+	# 	all_references = {}
+	# 	all_referencedby = {}
+	# 	for method in obj['methods']:
+	# 		all_references.update(dict([ (ref['refid'], ref['name']) for ref in method['references'] ]))
+	# 		all_referencedby.update(dict([ (ref['refid'], ref['name']) for ref in method['referencedby'] ]))
 	
-		print("\nReferences:")
-		for k, v in all_references.iteritems():
-			print("\t'%s': (%s)"%(v, k))
-		print("\nReferenced by:")
-		for k, v in all_referencedby.iteritems():
-			print("\t'%s': (%s)"%(v, k))
-		print('')
+	# 	print("\nReferences:")
+	# 	for k, v in all_references.iteritems():
+	# 		print("\t'%s': (%s)"%(v, k))
+	# 	print("\nReferenced by:")
+	# 	for k, v in all_referencedby.iteritems():
+	# 		print("\t'%s': (%s)"%(v, k))
+	# 	print('')
 	return obj
-
-def loadNamespace(info, traceTypeInfo=False, printSummary=True):
-	pass
-
-def loadUnion(info, traceTypeInfo=False, printSummary=True):
-	pass
-
-def loadEnum(info, traceTypeInfo=False, printSummary=True):
-	pass
 
 def scanScriptableness(item):
 	pass
 
-def loadAnything(stuff):
+def loadAnything(stuff, **kwargs):
+	# print(kwargs)
 	# print("ENTER %s"%(stuff['refid']))
 	# print("%d / %d: %f%%"%(stuff['k'], stuff['n'], float(stuff['k']) / float(stuff['n']) * 100.0))
 	try:
 		if stuff['kind'] == 'class' or stuff['kind'] == 'struct':
-			rs = loadClass(stuff)
+			# rs = None
+			rs = loadClass(stuff, **kwargs)
 		elif stuff['kind'] == 'namespace':
-			print("Loading namespaces not yet implemented")
-			rs = stuff
+			rs = loadNamespace(stuff, **kwargs)
+			# rs = None
 		elif stuff['kind'] == 'union':
-			print("Loading unions not yet implemented")
-			rs = stuff
+			# print("Loading unions not yet implemented")
+			rs = loadUnion(stuff, **kwargs)
 		elif stuff['kind'] == 'enum':
-			print("Loading enums not yet implemented")
+			print("Loading enums not implemented")
 			rs = stuff
 		else:
 			print("Cant load '%s'"%(stuff['kind']))
 			return stuff
 	except Exception as error:
+		traceback.print_exc()
 		print(error)
 		# print("EXIT %s"%(stuff['refid']))
 		return rs
 	# print("EXIT %s"%(stuff['refid']))
 	return rs
 
+def bindkwargs(f, **kwargs):
+	return lambda *args: f(*args, **kwargs)
 
 class DoxygenScanner(object):
 	''' Scans doxygen xml output. Does lazy loading + scanning of doxygen files to keep individual querries relatively fast.
@@ -719,38 +916,146 @@ class DoxygenScanner(object):
 		for k, v in member_tag_examples.iteritems():
 			print("%s\n\t%s"%(k, v))
 
-	def loadEverything(self):
-		try:
+	def loadEverything(self, **kwargs):
+		# try:
+			# print("kwargs = %s"%kwargs)
 			scanner.loadIndex()
-			pool = Pool(processes=32)
 			classes = self.cat_lookup['classes']
 			namespaces = self.cat_lookup['namespaces']
 			enums = self.cat_lookup['enums']
 			unions = self.cat_lookup['unions']
 			everything = classes + namespaces + enums + unions
-			print(everything)
-			print(len(everything))
+			# print(everything)
+			# print(len(everything))
+			pool = Pool(processes=32)
 
 			things = [ self.index[thing] for thing in everything if thing in self.index ]
-			print(len(things))
+			# print(len(things))
 
 			for i, thing in enumerate(things):
 				thing['k'] = i
 				thing['n'] = len(things)
 
-			# rs = map(loadAnything, things)
-			rs = pool.map(loadAnything, things)
-			pool.close()
-			pool.join()
-			print("Finished")
+			USE_MULTITHREADING = True
+
+			if USE_MULTITHREADING:
+				rs = pool.map(loadAnything, things)
+				pool.close()
+				pool.join()
+			else:
+				rs = map(bindkwargs(loadAnything, **kwargs), things)
+			# print("Finished")
 			# output = [ tmp.get() for tmp in rs ]
-			print(len(rs))
+			# print(len(rs))
 			for r in rs:
 				self.loaded_items[r['refid']] = r
-		except Exception as e:
-			print("EARLY EXIT")
-			print(e)
-		print("Done")
+		# except Exception as e:
+		# 	print("EARLY EXIT")
+		# 	print(e)
+		# print("Done")
+
+	def runScriptTrace(self, entry_typenames):
+		print("loading...")
+		self.loadEverything(traceTypeInfo=False, printSummary=False)
+
+		all_types = self.cat_lookup['classes'] + self.cat_lookup['namespaces'] + self.cat_lookup['enums'] + self.cat_lookup['unions']
+		# print(all_types)
+
+		entry_typenames = set(entry_typenames)
+		entrypoints = [ self.loaded_items[ref] for ref in all_types if ref in self.index and self.index[ref]['name'] in entry_typenames ]
+		unresolved  = [ name for name in entry_typenames if not name in [ x['name'] for x in entrypoints ]]
+
+		for thing in entrypoints:
+			print("Resolved '%s' to %s '%s'"%(thing['name'], thing['kind'], thing['refid']))
+		if unresolved:
+			print("Could not resolve: " + ', '.join(unresolved))
+
+		def getScriptableMethods(cls):
+			return [ 
+				method for method in cls['methods'] 
+				if 'Q_INVOKABLE' in method['type'] or (method['kind'] in ('signal', 'slot') and method['prot'] == 'public')
+			]
+		def getScriptableProperties(cls):
+			return [
+				prop for prop in cls['properties']
+				if prop['prot'] == 'public'
+			]
+		def getReferencedTypes(members):
+			exposed_types = set()
+			for member in members:
+				exposed_types.add(member['type'].replace("Q_INVOKABLE", "").strip())
+				if 'params' in members:
+					for param in members:
+						exposed_types.add(param['type'])
+			f = lambda s: s.replace('const', '').replace('&', '').replace('*', '').strip()
+			return filter(f, exposed_types)
+
+		def getInternalTypes(types):
+			def getAllTypesFromTemplates(type_):
+				if '<' in type_ or '>' in type_:
+					l = type_.strip('>').split('<')
+					first, rest = l[0], '<'.join(l[1:])
+					yield first.strip()
+					for x in rest.split(','):
+						for v in getAllTypesFromTemplates(x.strip()):
+							yield v		
+				else:
+					yield type_
+			extracted_types = set()
+			for t in types:
+				extracted_types.update(set(getAllTypesFromTemplates(t)))
+			return extracted_types
+
+		def scanClass(cls, typelist):
+			print("Scanning %s '%s'. Found scriptable members:"%(cls['kind'], cls['name']))
+			for method in getScriptableMethods(cls):
+				print("\t%s %s (%s (%s))"%(method['kind'], method['name'], method['type'], ', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
+			for prop in getScriptableProperties(cls):
+				print("\t%s %s (%s)"%(prop['kind'], prop['name'], prop['type']))
+			members = getScriptableMethods(cls) + getScriptableProperties(cls)
+			types = getReferencedTypes(members)
+			print("%d raw types:"%len(types))
+			for t in types:
+				print("\t%s"%t)
+			typelist.update(getInternalTypes(types))
+
+
+		builtin_types = set(['int', 'void', 'float', 'char', 'bool'])
+		qt_types = set(['QVector', 'QUuid', 'QVariantMap', 'QString'])
+		library_types = set(['glm::vec3', 'glm::mat4', 'glm::quat'])
+		hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
+
+		def scanRecursive(cls, openlist, closedlist):
+			tl = set()
+			for cls in entrypoints:
+				if cls['kind'] in ('struct', 'class'):
+					scanClass(cls, tl)
+			print("%d types: %s"%(len(tl), ', '.join(tl)))
+	
+			builtin_types &= tl
+			tl -= builtin_types
+	
+			qt_types &= tl
+			tl -= qt_types
+	
+			library_types &= tl
+			tl -= library_types
+	
+			hifi_types = dict([ (k, v) for k, v in hifi_types.iteritems() if k in tl ])
+			tl -= set(hifi_types.keys())
+		# hifi_types &= tl
+		# tl -= hifi_types
+
+		print("Used builtins: %s"%(list(builtin_types)))
+		print("Used qt types: %s"%(list(qt_types)))
+		print("Used library types: %s"%(list(library_types)))
+		print("Used hifi types: %s"%(hifi_types))
+		print("Unknown types: %s"%(list(tl)))
+
+		entrypoints = {}
+		# for typename in entry_types:
+
+
 
 
 
@@ -775,7 +1080,9 @@ if __name__ == '__main__':
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
 
-	scanner.loadEverything()
+	# scanner.loadEverything()
+
+	scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
 
 	# scanner.debugFindThingWithProperties()
 	# scanner.debugPrintParamInnerTags()
