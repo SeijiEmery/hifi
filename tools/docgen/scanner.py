@@ -144,16 +144,16 @@ class XmlScanner:
 			self.parseMembers(ref.members, clsnode.iter('sectiondef'))
 
 		def parseMembers(self, expectedMembers, sections):
-			self.methods_by_category = {}
+			self.members = []
 			expectedIds = set(expectedMembers.keys())
 			for section in sections:
 				category = self.categorize(section.attrib['kind'])
-				self.methods_by_category[category] = [ 
-					member for member in section.iter('memberdef') 
-					if member.attrib['id'] in expectedIds ]
-			print(self.methods_by_category)
+				self.members += map(self.parseMemberWithSection(section), section.iter('memberdef'))
 
-		def parseMember(self, expectedMembers, memberxml):
+			self.members = dict([ member.refid for member in self.members ], self.members)
+			print(self.members)
+
+		def parseMemberWithSection(self, section):
 			pass
 
 

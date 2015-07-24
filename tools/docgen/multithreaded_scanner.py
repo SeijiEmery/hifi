@@ -236,7 +236,7 @@ def parseParams(node):
 
 def getDescription(node):
 	def getDescriptionLine(descrip):
-		if getChildNode(node, descrip):
+		if getChildNode(node, descrip) is not None:
 			return getChildInnerXml(node, descrip, preserveChildNodes=True).strip()
 		return ''
 	return {
@@ -263,6 +263,8 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 		'members': [],
 		'methods': [],
 		'properties': [],
+		'enums': [],
+		'typedefs': [],
 		# 'used-types': [],
 		# 'references': [],
 		# 'referencedby': [],
@@ -336,11 +338,80 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 		obj['members'].append(member)
 
 	def parseProperty(node):
-		pass
+		name = _getNodeName(node)
+		loc = getChildNode(node, 'location')
+		obj['properties'].append({
+			'name': name,
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'prot': node.attrib['prot'],
+			'static': doxybool(node.attrib['static']),
+			'read': (doxybool(node.attrib['readable']) and getChildNode(node, 'read').text) or None,
+			'write': (doxybool(node.attrib['writable']) and getChildNode(node, 'write').text) or None,
+			'description': getDescription(node),
+			'type': getChildInnerXml(node, 'type'),
+			'file': loc.attrib['file'],
+			'line': loc.attrib['line'],
+			'references': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref),
+				'compoundref': ref.attrib['compoundref'] if 'compundref' in ref.attrib else ''
+			} for ref in node.iter('references')],
+			'referencedby': [{
+				'refid': ref.attrib['refid'],
+				'name': getInnerXml(ref)
+			} for ref in node.iter('referencedby')]
+		})
+		# print("PROPERTY")
+		# print(obj['properties'][-1])
+		# print(node, node.__dict__)
+		# print("READ: %s"%(getChildNode(node, 'read') is not None and getChildNode(node, 'read').__dict__))
+		# print("WRITE: %s"%(getChildNode(node, 'write') is not None and getChildNode(node, 'write').__dict__))
+		# pass
+
+	def parseEnum(node, name):
+		# for value in node.iter('enumvalue'):
+		# 	print('%s: %s'%(_getNodeName(value), value.__dict__))
+		return {
+			'name': _getNodeName(node),
+			'refid': node.attrib['id'],
+			'kind': node.attrib['kind'],
+			'prot': node.attrib['prot'],
+			'values': [{
+				'name': _getNodeName(value),
+				'refid': value.attrib['id'],
+				'initializer': getChildInnerXml(value, 'initializer'),
+				'description': getDescription(value)
+			} for value in node.iter('enumvalue')],
+			'description': getDescription(node)
+		}
+		# print(name)
+	def parseTypedef(node):
+		# print("TYPEDEF %s: %s"%(node, node.__dict__))
+		return {
+			'name': _getNodeName(node),
+			'refid': node.attrib['id'],
+			'prot': node.attrib['prot'],
+			'type': getChildInnerXml(node, 'type'),
+			'description': getDescription(node)
+		}
+
+
 
 	def parseInternalType(node):
-		print("INTERNAL TYPE")
-		print("%s %s")%(node, node.__dict__)
+		# print("INTERNAL TYPE")
+		if node.attrib['kind'] == 'enum':
+			# print("%s %s")%(node, node.__dict__)
+			obj['enums'].append(parseEnum(node, obj['name'] + '::' + _getNodeName(node)))
+			# print("%s = %s")%(obj['name'] + '::' + _getNodeName(node), obj['enums'][-1])
+		elif node.attrib['kind'] == 'typedef':
+			# print("%s %s")%(node, node.__dict__)
+			obj['typedefs'].append(parseTypedef(node))
+			# print("%s = %s")%(obj['name'] + '::' + _getNodeName(node), obj['typedefs'][-1])
+		else:
+			print("UNKNOWN KIND %s"%(node.attrib['kind']))
+			print("%s %s")%(node, node.__dict__)
+			
 
 	def parseFriend(node):
 		# print("%s %s")%(node, node.__dict__)
@@ -371,14 +442,17 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 	parseSections({
 		'methods': parseMethod,
 		'members': parseMember,
-		'properties': tbd('property'),
+		'properties': parseProperty,
 		'friends': parseFriend,
 		'types': parseInternalType
 	})
 
 	if printSummary:
 		print("\nParsed %s %s (%s)\n%s\n"%(obj['kind'], obj['name'], obj['refid'],
-			  "Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties']])))
+			  "Has " + fmtHumanReadableList([ '%d %s'%(len(obj[k]), k) for k in ['methods', 'members', 'properties', 'enums', 'typedefs']])))
+	# print(compound.__dict__)
+	# print(getChildInnerXml(compound, 'basecompoundref', preserveChildNodes=True))
+	# print(getChildInnerXml(compound, 'inheritancegraph', preserveChildNodes=True) if getChildNode(compound, 'inheritancegraph') else "NO INHERITANCE") 
 
 	if traceTypeInfo:
 		print("\nUsed types: ")
@@ -400,12 +474,21 @@ def loadClass(info, traceTypeInfo=False, printSummary=True):
 		print('')
 	return obj
 
+def loadNamespace(info, traceTypeInfo=False, printSummary=True):
+	pass
+
+def loadUnion(info, traceTypeInfo=False, printSummary=True):
+	pass
+
+def loadEnum(info, traceTypeInfo=False, printSummary=True):
+	pass
+
 def scanScriptableness(item):
 	pass
 
 def loadAnything(stuff):
-	print("ENTER %s"%(stuff['refid']))
-	print("%d / %d: %f%%"%(stuff['k'], stuff['n'], float(stuff['k']) / float(stuff['n']) * 100.0))
+	# print("ENTER %s"%(stuff['refid']))
+	# print("%d / %d: %f%%"%(stuff['k'], stuff['n'], float(stuff['k']) / float(stuff['n']) * 100.0))
 	try:
 		if stuff['kind'] == 'class' or stuff['kind'] == 'struct':
 			rs = loadClass(stuff)
@@ -423,9 +506,9 @@ def loadAnything(stuff):
 			return stuff
 	except Exception as error:
 		print(error)
-		print("EXIT %s"%(stuff['refid']))
+		# print("EXIT %s"%(stuff['refid']))
 		return rs
-	print("EXIT %s"%(stuff['refid']))
+	# print("EXIT %s"%(stuff['refid']))
 	return rs
 
 
