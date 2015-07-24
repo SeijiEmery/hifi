@@ -144,7 +144,7 @@
     
     // The Checkbox class
     var Checkbox = function(x,y,width,thumbSize) {
-    
+    	print("Entering Checkbox constructor");
         this.background = Overlays.addOverlay("text", {
                         backgroundColor: { red: 125, green: 125, blue: 255 },
                         x: x,
@@ -175,7 +175,6 @@
         this.boxCheckStatus = false;
         this.clickedBox = false;
     
-        
         this.checkMark = Overlays.addOverlay("text", {
                         backgroundColor: { red: 0, green: 255, blue: 0 },
                         x: checkX,
@@ -195,9 +194,12 @@
                         alpha: 1.0,
                         visible: !this.boxCheckStatus
                     });
+                    print("Leaving checkbox constructor");
+        		
     };
     
-    Checkbox.prototype.updateThumb = function() { 
+    Checkbox.prototype.updateThumb = function() {
+    	print("Entering Checkbox.updateThumb");
             if(!this.clickedBox) {
                 return;
             }  
@@ -206,7 +208,7 @@
             } else {
                 Overlays.editOverlay(this.unCheckMark, { visible: true });
             }
-            
+            print("Exiting Checkbox.updateThumb");
         };
     
     Checkbox.prototype.isClickableOverlayItem = function(item) {
@@ -228,13 +230,15 @@
     Checkbox.prototype.onMouseReleaseEvent = function(event) {
             this.clickedBox = false;
         };
-    
-    
         // Public members:
     Checkbox.prototype.setNormalizedValue = function(value) {
+    		print("Entering Checkbox.setNormalizedValue");
             this.boxCheckStatus = value;
+            print("Running onValueChanged")
             this.onValueChanged(this.getValue());
+            print("Exiting onValueChanged")
             this.updateThumb();
+            print("Exiting Checkbox.setNormalizedValue");
         };
     
     Checkbox.prototype.getNormalizedValue = function() {
@@ -242,7 +246,9 @@
         };
     
     Checkbox.prototype.setValue = function(value) {
+    		print("Entering Checkbox.setValue")
             this.setNormalizedValue(value);
+            print("Exiting Checkbox.setValue");
         };
     
     Checkbox.prototype.reset = function(resetValue) {
@@ -258,9 +264,11 @@
         };
     
     Checkbox.prototype.setterFromWidget = function(value) {
+    		print("Entering Checkbox.setterFromWidget");
             var status = this.boxCheckStatus;
             this.onValueChanged(this.boxCheckStatus);
             this.updateThumb();
+            print("Exiting Checkbox.setterFromWidget");
         };
     
     Checkbox.prototype.onValueChanged = function(value) {};
@@ -268,8 +276,8 @@
     Checkbox.prototype.destroy = function() {
             Overlays.deleteOverlay(this.background);
             Overlays.deleteOverlay(this.thumb);
-            Overlays.deleteOverlay(checkMark);
-            Overlays.deleteOverlay(unCheckMark);
+            Overlays.deleteOverlay(this.checkMark);
+            Overlays.deleteOverlay(this.unCheckMark);
         };
     
     Checkbox.prototype.setThumbColor = function(color) {
@@ -749,6 +757,7 @@
     
     Panel.prototype.newCheckbox = function(name, setValue, getValue, displayValue) {
         var display;
+        print("Entering Panel.newCheckbox");
         if (displayValue == true) {
             display = function() {return "On";};
         } else if (displayValue == false) {
@@ -765,6 +774,7 @@
         item.widget.onValueChanged = function(value) { item.setterFromWidget(value); };
         item.setter(getValue()); 
         this.items[name] = item;
+        print("Exiting Panel.newCheckbox");
         
         //print("created Item... checkbox=" + name);     
     };
