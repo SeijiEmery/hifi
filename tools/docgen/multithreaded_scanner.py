@@ -5,7 +5,7 @@ from xml.etree import ElementTree
 import traceback
 import re
 
-USE_MULTITHREADING = True
+USE_MULTITHREADING = False
 
 
 class ConditionalTask(object):
@@ -936,8 +936,6 @@ class DoxygenScanner(object):
 				thing['k'] = i
 				thing['n'] = len(things)
 
-			USE_MULTITHREADING = True
-
 			if USE_MULTITHREADING:
 				rs = pool.map(loadAnything, things)
 				pool.close()
@@ -969,6 +967,7 @@ class DoxygenScanner(object):
 			print("Resolved '%s' to %s '%s'"%(thing['name'], thing['kind'], thing['refid']))
 		if unresolved:
 			print("Could not resolve: " + ', '.join(unresolved))
+		entrypoints = dict([ (x['refid'], x) for x in entrypoints ])
 
 		def getScriptableMethods(cls):
 			return [ 
@@ -989,7 +988,6 @@ class DoxygenScanner(object):
 						exposed_types.add(param['type'])
 			f = lambda s: s.replace('const', '').replace('&', '').replace('*', '').strip()
 			return filter(f, exposed_types)
-
 		def getInternalTypes(types):
 			def getAllTypesFromTemplates(type_):
 				if '<' in type_ or '>' in type_:
@@ -1005,7 +1003,6 @@ class DoxygenScanner(object):
 			for t in types:
 				extracted_types.update(set(getAllTypesFromTemplates(t)))
 			return extracted_types
-
 		def scanClass(cls, typelist):
 			print("Scanning %s '%s'. Found scriptable members:"%(cls['kind'], cls['name']))
 			for method in getScriptableMethods(cls):
@@ -1018,44 +1015,67 @@ class DoxygenScanner(object):
 			for t in types:
 				print("\t%s"%t)
 			typelist.update(getInternalTypes(types))
+			return {
+				'refid': cls['refid'],
+				'scriptable_members': members,
+				'referenced_types': types
+			}
 
-
-		builtin_types = set(['int', 'void', 'float', 'char', 'bool'])
-		qt_types = set(['QVector', 'QUuid', 'QVariantMap', 'QString'])
-		library_types = set(['glm::vec3', 'glm::mat4', 'glm::quat'])
 		hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
+		hifi_type_keys = set(hifi_types.keys())
 
-		def scanRecursive(cls, openlist, closedlist):
-			tl = set()
-			for cls in entrypoints:
-				if cls['kind'] in ('struct', 'class'):
-					scanClass(cls, tl)
-			print("%d types: %s"%(len(tl), ', '.join(tl)))
-	
-			builtin_types &= tl
-			tl -= builtin_types
-	
-			qt_types &= tl
-			tl -= qt_types
-	
-			library_types &= tl
-			tl -= library_types
-	
-			hifi_types = dict([ (k, v) for k, v in hifi_types.iteritems() if k in tl ])
-			tl -= set(hifi_types.keys())
-		# hifi_types &= tl
-		# tl -= hifi_types
+		def checkTypes(typelist):
+			builtin_types = set(['int', 'void', 'float', 'char', 'bool'])
+			qt_types = set(['QVector', 'QUuid', 'QVariantMap', 'QString'])
+			library_types = set(['glm::vec3', 'glm::vec3', 'glm::mat4', 'glm::quat'])
+			hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
+			hifi_type_keys = set(hifi_types.keys())
 
-		print("Used builtins: %s"%(list(builtin_types)))
-		print("Used qt types: %s"%(list(qt_types)))
-		print("Used library types: %s"%(list(library_types)))
-		print("Used hifi types: %s"%(hifi_types))
-		print("Unknown types: %s"%(list(tl)))
+			builtin_types &= typelist
+			typelist -= builtin_types
 
-		entrypoints = {}
-		# for typename in entry_types:
+			qt_types &= typelist
+			typelist -= qt_types
 
+			library_types &= typelist
+			typelist -= library_types
 
+			hifi_types = dict([ (k, v) for k, v in hifi_types.iteritems() if k in typelist ])
+			typelist -= set(hifi_types.keys())
+
+			print("Used builtins: %s"%(list(builtin_types)))
+			print("Used qt types: %s"%(list(qt_types)))
+			print("Used library types: %s"%(list(library_types)))
+			print("Used hifi types: %s"%(hifi_types.keys()))
+			print("Unknown types: %s"%(list(typelist)))
+
+		def scanRecursive(types, closedlist):
+			typelist, scannedItems = set(), {}
+			for k, t in types.iteritems():
+				if t['kind'] in ('struct', 'class'):
+					scannedItems[t['refid']] = scanClass(t, typelist)
+			print("%d types: %s"%(len(typelist), ', '.join(typelist)))
+
+			hftypes = (typelist & hifi_type_keys) - closedlist
+			closedlist |= typelist
+
+			print("Typelist: " + ', '.join(hftypes))
+			if len(hftypes) != 0:
+				print("Recursing " + ', '.join(hftypes))
+				print(dict([(k, hifi_types[k]) for k in hftypes ]))
+				newItems = scanRecursive(dict([ (k, self.loaded_items[hifi_types[k]]) for k in hftypes ]), closedlist)
+				scannedItems.update(newItems)
+			return scannedItems
+			openlist, closedlist  
+
+		typelist = set()
+		print(entrypoints.keys())
+		items = scanRecursive(entrypoints, typelist)
+		checkTypes(typelist)
+		for k, v in items.iteritems():
+			print("Scanned %s (%s)"%(self.index[v['refid']]['name'], k))
+		return items
+		
 
 
 
@@ -1080,8 +1100,9 @@ if __name__ == '__main__':
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
 
-	# scanner.loadEverything()
+	# scanner.loadEverything(printSummary=True, traceTypeInfo=True)
 
+	USE_MULTITHREADING = True
 	scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
 
 	# scanner.debugFindThingWithProperties()
