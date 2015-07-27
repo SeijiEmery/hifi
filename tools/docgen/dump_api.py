@@ -104,7 +104,7 @@ def dump_scriptable_info(scan_output, api):
 	def dump_property(prop):	
 		print("\t%s %s"%(prop['kind'], prop['name']))
 		print("\tcpp type: %s"%(prop['type']))
-		print("\tjs type:  %s"%(toJsType(prop['type'])))
+		print("\tjs type: {%s}"%(toJsType(prop['type'])))
 		if prop['read']:
 			print("\t\tREAD:  %s"%(prop['read']))
 		if prop['write']:
@@ -122,8 +122,9 @@ def dump_scriptable_info(scan_output, api):
 	def dump_method(method):	
 		print("\t%s %s"%(method['kind'], method['name']))
 		print('\tcpp type: %s (%s)'%(method['type'], ', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
-		print('\tjs type:  %s (%s)'%(toJsType(method['type']), ', '.join([
-			'%s %s'%(toJsType(p['type']), p['name']) for p in method['params'] ])))
+		type_ = toJsType(method['type'])
+		print('\tjs type: %s(%s)'%('{%s} '%(type_) if type_ else '', ', '.join([
+			'{%s} %s'%(toJsType(p['type']), p['name']) for p in method['params'] ])))
 		if method['description']['brief']:
 			print("\t\tbrief: %s"%(method['description']['brief']))
 		if method['description']['details']:
