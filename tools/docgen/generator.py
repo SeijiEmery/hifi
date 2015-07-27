@@ -341,9 +341,55 @@ class JsdocGenerator(object):
 	def __init__(self, config):
 		self.config = config
 
-	def generate(self, scanner):
-		items = scanner.runScriptTrace(['EntityScriptingInterface'])
+	def generate(self, scanner, entrypoints):
+		items = scanner.runScriptTrace(entrypoints.values())
 
+		print("")
+		print("GENERATING JSDOC")
+		print("")
+
+		def genClass(cls):
+			doc =  "/** %s %s \n"
+			if cls['description'] and cls['description']['brief']:
+				doc += " * %s\n"%(cls['description']['brief'])
+			doc += "  * @class \n";
+			doc += " */\n"
+			stub = "var %s = function(){};"%(cls['name'].replace('::', '.'))
+
+			s = '%s\n%s\n\n'%(doc, stub)
+			for method in cls['scriptable']['methods']:
+				
+
+
+			return "CLASS %s\n"%(cls['name'])
+
+		def genNonScriptable(item):
+			doc = "/** %s %s (NON-SCRIPTABLE) */"%(item['kind'], item['name'])
+			stub = "var %s = function(){};"%(item['name'].replace('::', '.'))
+			return '%s\n%s\n\n'%(doc, stub)
+
+		generators = {
+			'struct': genClass,
+			'class':  genClass,
+		}
+
+		s = ''
+		for item in items['items'].itervalues():
+			if item['scriptable']:
+				s += generators[item['kind']](item)
+			else:
+				s += genNonScriptable(item)
+		print(s)
+
+	def generateMethodStub(self, objdecl, method, rval):
+		rtype, params = method['jstype'] if 'jstype' in method else method['type']
+		params = ', '.join([ (param['declname'] if 'declname' in param else param['defname']) for param in params ])
+
+		return ('%s.%s = function (%s) {\n' 	    + \
+			    '    // native code\n' 			+ \
+			    ('    // (%s:%s)\n' and '')	    + \
+			    ('    return %s;\n' % rval if (rval and rval != 'undefined') else '') + \
+			    '};') % (objdecl, method['name'], params)#, '', 0)#method['file'], method['line'])
 
 
 if __name__ == '__main__':
@@ -352,7 +398,11 @@ if __name__ == '__main__':
 	os.chdir('../../')		# cd to root dir
 	autobuild()
 	scanner = DoxygenScanner('docs/xml')
-	generator.generate(scanner)
+	generator.generate(scanner, {
+		'Entities': 'EntityScriptingInterface',
+		'Scene': 'SceneScriptingInterface',
+		'Script': 'ScriptEngine'
+	})
 
 
 

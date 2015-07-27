@@ -704,7 +704,7 @@ def loadItem(stuff, **kwargs):
 
 
 
-def doScriptTrace(item, debugPrint=False):
+def doScriptTrace(item, debugPrint=True):
 	# item = item.clone()
 	typelist = set()
 
@@ -1091,7 +1091,7 @@ class DoxygenScanner(object):
 		print("\nRunning script trace\n")
 
 		for typename, refid in zip(typenames, typename_refs):
-			if refid is None:
+			if refid is None or refid not in self.loaded_items:
 				unresolved.append(typename)
 			else:
 				entrypoints[refid] = self.loaded_items[refid]
@@ -1134,8 +1134,8 @@ class DoxygenScanner(object):
 			# rs = map(doScriptTrace, items_to_scan)
 			tl = set()
 			for item, ts in rs:
+				scanned_items[item['refid']] = item
 				if ts is not None:
-					scanned_items[item['refid']] = item
 					tl |= ts
 
 			tl -= used_types
@@ -1226,7 +1226,67 @@ if __name__ == '__main__':
 	# scanner.loadEverything(printSummary=True, traceTypeInfo=True)
 
 	USE_MULTITHREADING = True
-	scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
+	# scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
+
+	script_api = {
+		"Script": "ScriptEngine",
+		"Audio": "AudioScriptingInterface",
+		"Controller": "ControllerScriptingInterface",
+		"Entities": "EntityScriptingInterface",
+		"Quat": "Quat",
+		"Vec3": "Vec3",
+		"AnimationCache": "AnimationCache",
+		"MyAvatar": "MyAvatar",
+		"AvatarList": "AvatarHashMap",
+		"Camera": "Camera",
+		"SpeechRecognizer": "SpeechRecognizer",
+		"Clipboard": "ClipboardScriptingInterface",
+		"Overlays": "Overlays",
+		"Window": "WindowScriptingInterface",
+		#"location": property LocationScriptingInterface::locationGetter/locationSetter
+		"WebWindow": "WebWindowClass::constructor",
+		"Menu": "MenuScriptingInterface",
+		"Settings": "SettingsScriptingInterface",
+		"AudioDevice": "AudioDeviceScriptingInterface",
+		"AnimationCache": "AnimationCache",
+		"SoundCache": "SoundCache",
+		"Account": "AccountScriptingInterface",
+		"GlobalServices": "GlobalServicesScriptingInterface",
+		"AvatarManager": "AvatarManager",
+		"UndoStack": "UndoStackScriptingInterface",
+		"LODManager": "LODManager",
+		"Paths": "PathUtils",
+		"HMD": "HMDScriptingInterface",
+		#"getHudLookAtPosition2D": "HMDScriptingInterface::getHUDLookAtPosition2D",
+		#"getHUDLookAtPosition3D": "HMDScriptingInterface::getHUDLookAtPosition3D",
+		"Scene": "SceneScriptingInterface",
+		"ScriptDiscoveryService": "RunningScriptsWidget",
+		"XMLHttpRequest": "XMLHttpRequestClass::constructor",
+		"AudioEffectOptions": "AudioEffectOptions::constructor",
+		#"print": "ScriptEngine::debugPrint",
+
+		#"version": "",		builtin
+		#"gc": "",			builtin
+		#"ArrayBuffer": "",
+		#"DataView": "",
+		#"Int8Array": "",
+		#"Uint8Array": "",
+		#"Uint8ClampedArray": "",
+		#"Int16Array": "",
+		#"Uint16Array": "",
+		#"Int32Array": "",
+		#"Uint32Array": "",
+		#"Float32Array": "",
+		#"Float64Array": "",
+	}
+
+	scanner.runScriptTrace(script_api.values())
+
+
+
+
+
+
 
 	# scanner.debugFindThingWithProperties()
 	# scanner.debugPrintParamInnerTags()
