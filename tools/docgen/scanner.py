@@ -1,4 +1,5 @@
 
+import sys
 import os.path
 from multiprocessing import Pool, Queue
 from xml.etree import ElementTree
