@@ -5,20 +5,7 @@ from xml.etree import ElementTree
 import traceback
 import re
 
-USE_MULTITHREADING = False
-
-
-class ConditionalTask(object):
-	def __init__(self, task, runCondition, *args):
-		self.task = task
-		self.runCondition = runCondition
-		self.args = args
-
-	def tryRun(self):
-		if self.runCondition():
-			self.task(*self.args)
-			return True
-		return False
+USE_MULTITHREADING = True
 
 def _getNodeName(node, tag = 'name'):
 	name = [ ''.join(elem.itertext()) for elem in node.iter(tag) ][0]
@@ -818,19 +805,19 @@ class DoxygenScanner(object):
 
 			self.sanityCheckTypesAreNotAliased(['classes', 'namespaces', 'unions'])
 
-			def getn(d, n):
-				d2, i = {}, abs(n)
-				for k, v in d.iteritems():
-					if i <= 0:
-						break
-					d2[k] = v
-					i -= 1
-				return d2
+			# def getn(d, n):
+			# 	d2, i = {}, abs(n)
+			# 	for k, v in d.iteritems():
+			# 		if i <= 0:
+			# 			break
+			# 		d2[k] = v
+			# 		i -= 1
+			# 	return d2
 				# return dict([ (k, v) for k, v in d.iteritems() ][:n])
 
-			for k, v in self.cat_lookup.iteritems():
-				print("self.cat_lookup['%s'] = %s"%(k, v[:20]))
-			print("\n\tself.name_lookup = %s"%(getn(self.name_lookup, 20)))
+			# for k, v in self.cat_lookup.iteritems():
+				# print("self.cat_lookup['%s'] = %s"%(k, v[:20]))
+			# print("\n\tself.name_lookup = %s"%(getn(self.name_lookup, 20)))
 			# print(getn(self.name_lookup, 20))
 
 			# print("\nNAME LOOKUP:")
