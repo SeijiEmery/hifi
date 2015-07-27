@@ -30,7 +30,6 @@ def _addToListByKey(dict_, key, value):
 	else:
 		dict_[key] = [ value ]
 
-
 def makeLookup(dict_):
 	def lookup(key):
 		return dict_[key]
@@ -675,10 +674,7 @@ def loadClass(info, traceTypeInfo=False, printSummary=False):
 	# 	print('')
 	return obj
 
-def scanScriptableness(item):
-	pass
-
-def loadAnything(stuff, **kwargs):
+def loadItem(stuff, **kwargs):
 	# print(kwargs)
 	# print("ENTER %s"%(stuff['refid']))
 	# print("%d / %d: %f%%"%(stuff['k'], stuff['n'], float(stuff['k']) / float(stuff['n']) * 100.0))
@@ -705,6 +701,87 @@ def loadAnything(stuff, **kwargs):
 		return rs
 	# print("EXIT %s"%(stuff['refid']))
 	return rs
+
+
+
+def doScriptTrace(item, debugPrint=False):
+	# item = item.clone()
+	typelist = set()
+
+	if debugPrint:
+		def print_(s):
+			print(s)
+	else:
+		def print_(s):
+			pass
+
+	def getScriptableMethods(cls):
+		return [ 
+			method for method in cls['methods'] 
+			if 'Q_INVOKABLE' in method['type'] or (method['kind'] in ('signal', 'slot') and method['prot'] == 'public')
+		]
+	def getScriptableProperties(cls):
+		return [
+			prop for prop in cls['properties']
+			if prop['prot'] == 'public'
+		]
+	def getReferencedTypes(members):
+		exposed_types = set()
+		for member in members:
+			exposed_types.add(member['type'].replace("Q_INVOKABLE", "").strip())
+			if 'params' in members:
+				for param in members:
+					exposed_types.add(param['type'])
+		f = lambda s: s.replace('const', '').replace('&', '').replace('*', '').strip()
+		return map(f, exposed_types)
+
+	def scanClass(cls):
+		methods, props = getScriptableMethods(cls), getScriptableProperties(cls)
+		if methods or props:
+			typelist = set(getReferencedTypes(methods + props))
+			cls['scriptable'] = {
+				'methods': methods,
+				'properties': props,
+				'referenced_types': typelist
+			}
+			return cls, typelist
+		cls['scriptable'] = None
+		return cls, None
+
+	# print("Scanning %s %s"%(item['kind'], item['name']))
+	# print(item.keys())
+
+	if item['kind'] in ('class', 'struct'):
+		item, typelist = scanClass(item)
+	else:
+		print_("Can't parse %s %s"%(item['kind'], item['name']))
+		return item, None
+
+	# print("item['scriptable'] = %s"%(item['scriptable']))
+	if item['scriptable']:
+		# print("item['scriptable'] = {")
+		# print("\t'methods': [")
+		# for method in item['scriptable']['methods']:
+			# print("\t\t%s,"%(method))
+		# print("\t],")
+		# print("\t'properties': [")
+		# for prop in item['scriptable']['properties']:
+			# print("\t\t%s,"%(prop))
+		# print("\t],")
+		# print("\t'referenced_types': %s"%item['scriptable']['referenced_types'])
+
+		s = "Scanned %s %s. Has %d scriptable members: "%(item['kind'], item['name'], 
+			len(item['scriptable']['methods']) + len(item['scriptable']['properties']))
+		for method in item['scriptable']['methods']:
+			s += '\n\t%s %s (%s (%s))'%(method['kind'], method['name'], method['type'], 
+				', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ]))
+		for prop in item['scriptable']['properties']:
+			s += '\n\t%s %s (%s)'%(prop['kind'], prop['name'], prop['type'])
+		print_(s)
+	else:
+		print_("%s %s is not scriptable"%(item['kind'], item['name']))
+	return item, typelist
+
 
 def bindkwargs(f, **kwargs):
 	return lambda *args: f(*args, **kwargs)
@@ -740,6 +817,21 @@ class DoxygenScanner(object):
 			print('Indexed %s'%(fmtHumanReadableList(summary)))
 
 			self.sanityCheckTypesAreNotAliased(['classes', 'namespaces', 'unions'])
+
+			def getn(d, n):
+				d2, i = {}, abs(n)
+				for k, v in d.iteritems():
+					if i <= 0:
+						break
+					d2[k] = v
+					i -= 1
+				return d2
+				# return dict([ (k, v) for k, v in d.iteritems() ][:n])
+
+			for k, v in self.cat_lookup.iteritems():
+				print("self.cat_lookup['%s'] = %s"%(k, v[:20]))
+			print("\n\tself.name_lookup = %s"%(getn(self.name_lookup, 20)))
+			# print(getn(self.name_lookup, 20))
 
 			# print("\nNAME LOOKUP:")
 			# for k, v in self.name_lookup.iteritems():
@@ -918,118 +1010,158 @@ class DoxygenScanner(object):
 
 	def loadEverything(self, **kwargs):
 		# try:
-			# print("kwargs = %s"%kwargs)
-			scanner.loadIndex()
-			classes = self.cat_lookup['classes']
-			namespaces = self.cat_lookup['namespaces']
-			enums = self.cat_lookup['enums']
-			unions = self.cat_lookup['unions']
-			everything = classes + namespaces + enums + unions
-			# print(everything)
-			# print(len(everything))
-			pool = Pool(processes=32)
+		# print("kwargs = %s"%kwargs)
+		self.loadIndex()
+		classes = self.cat_lookup['classes']
+		namespaces = self.cat_lookup['namespaces']
+		enums = self.cat_lookup['enums']
+		unions = self.cat_lookup['unions']
+		everything = classes + namespaces + enums + unions
+		# print(everything)
+		# print(len(everything))
+		pool = Pool(processes=32)
 
-			things = [ self.index[thing] for thing in everything if thing in self.index ]
-			# print(len(things))
+		things = [ self.index[thing] for thing in everything if thing in self.index ]
+		# print(len(things))
 
-			for i, thing in enumerate(things):
-				thing['k'] = i
-				thing['n'] = len(things)
+		for i, thing in enumerate(things):
+			thing['k'] = i
+			thing['n'] = len(things)
 
-			if USE_MULTITHREADING:
-				rs = pool.map(loadAnything, things)
-				pool.close()
-				pool.join()
+		if USE_MULTITHREADING:
+			rs = pool.map(loadItem, things)
+			pool.close()
+			pool.join()
+		else:
+			rs = map(bindkwargs(loadItem, **kwargs), things)
+		# print("Finished")
+		# output = [ tmp.get() for tmp in rs ]
+		# print(len(rs))
+
+		''' Apply enum fixes '''
+		for r in rs:
+			self.loaded_items[r['refid']] = r
+			if 'enums' in r:
+				for enum in r['enums']:
+					self.loaded_items[enum['refid']] = enum
+					# if not enum['refid'] in self.index:
+					# 	self.index[enum['refid']] = enum
+					enum['parent'] = r['refid']
+					enum['name'] = r['name'] + '::' + enum['name']
+					# print(self.cat_lookup['enums'])
+					self.cat_lookup['enums'].append(enum['refid'])
+					print("Registering type %s: %s"%(enum['name'], enum['refid']))
+		print('Enums: %s'%', '.join([ x['name'] for _, x in self.loaded_items.iteritems() if x['kind'] == 'enum']))
+
+		''' Insert everything into loaded_items and rebuild name_index '''
+		self.loaded_items = {}
+		self.name_index = {}
+
+		for item in rs:
+			self.loaded_items[item['refid']] = item
+			if item['refid'] not in self.index:
+				self.index[item['refid']] = item
+			if item['name'] in self.name_index:
+				self.name_index[item['name']].add(item['refid'])
 			else:
-				rs = map(bindkwargs(loadAnything, **kwargs), things)
-			# print("Finished")
-			# output = [ tmp.get() for tmp in rs ]
-			# print(len(rs))
-			for r in rs:
-				self.loaded_items[r['refid']] = r
-		# except Exception as e:
-		# 	print("EARLY EXIT")
-		# 	print(e)
-		# print("Done")
+				self.name_index[item['name']] = set([item['refid']])				
 
-	def runScriptTrace(self, entry_typenames):
+	def resolveTypename(self, typename):
+		if not typename in self.name_lookup:
+			return None
+		refids = self.name_lookup[typename]
+		if len(refids) != 1:
+			typename_kinds = set(['class', 'struct', 'enum', 'namespace', 'union'])
+			candidates = filter(lambda refid: self.loaded_items[refid]['kind'] in typename_kinds, refids)
+			if len(candidates) > 1:
+				print("ERROR -- Overlapping typedefns for '%s': %s"%(typename, ', '.join(candidates)))
+				return None
+			return candidates[0] if len(candidates) > 0 else None
+		return refids[0]
+
+	def runScriptTrace(self, typenames):
 		print("loading...")
 		self.loadEverything(traceTypeInfo=False, printSummary=False)
 
-		all_types = self.cat_lookup['classes'] + self.cat_lookup['namespaces'] + self.cat_lookup['enums'] + self.cat_lookup['unions']
-		# print(all_types)
+		# all_types = self.cat_lookup['classes'] + self.cat_lookup['namespaces'] + self.cat_lookup['enums'] + self.cat_lookup['unions']
 
-		entry_typenames = set(entry_typenames)
-		entrypoints = [ self.loaded_items[ref] for ref in all_types if ref in self.index and self.index[ref]['name'] in entry_typenames ]
-		unresolved  = [ name for name in entry_typenames if not name in [ x['name'] for x in entrypoints ]]
+		typename_refs = map(self.resolveTypename, typenames)
+		entrypoints, unresolved = {}, []
 
-		for thing in entrypoints:
-			print("Resolved '%s' to %s '%s'"%(thing['name'], thing['kind'], thing['refid']))
+		print("\nRunning script trace\n")
+
+		for typename, refid in zip(typenames, typename_refs):
+			if refid is None:
+				unresolved.append(typename)
+			else:
+				entrypoints[refid] = self.loaded_items[refid]
+				print("Resolved '%s' to %s '%s'"%(typename, self.index[refid]['kind'], refid))
+				assert(self.index[refid]['kind'] == self.loaded_items[refid]['kind'])
 		if unresolved:
 			print("Could not resolve: " + ', '.join(unresolved))
-		entrypoints = dict([ (x['refid'], x) for x in entrypoints ])
 
-		def getScriptableMethods(cls):
-			return [ 
-				method for method in cls['methods'] 
-				if 'Q_INVOKABLE' in method['type'] or (method['kind'] in ('signal', 'slot') and method['prot'] == 'public')
-			]
-		def getScriptableProperties(cls):
-			return [
-				prop for prop in cls['properties']
-				if prop['prot'] == 'public'
-			]
-		def getReferencedTypes(members):
-			exposed_types = set()
-			for member in members:
-				exposed_types.add(member['type'].replace("Q_INVOKABLE", "").strip())
-				if 'params' in members:
-					for param in members:
-						exposed_types.add(param['type'])
-			f = lambda s: s.replace('const', '').replace('&', '').replace('*', '').strip()
-			return filter(f, exposed_types)
-		def getInternalTypes(types):
-			def getAllTypesFromTemplates(type_):
+		# hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
+		# hifi_type_keys = set(hifi_types.keys())
+
+		def expandTypes(types):
+			def iterTemplateTypes(type_):
 				if '<' in type_ or '>' in type_:
 					l = type_.strip('>').split('<')
 					first, rest = l[0], '<'.join(l[1:])
 					yield first.strip()
 					for x in rest.split(','):
-						for v in getAllTypesFromTemplates(x.strip()):
+						for v in iterTemplateTypes(x.strip()):
 							yield v		
 				else:
 					yield type_
 			extracted_types = set()
 			for t in types:
-				extracted_types.update(set(getAllTypesFromTemplates(t)))
+				extracted_types.update(set(iterTemplateTypes(t)))
 			return extracted_types
-		def scanClass(cls, typelist):
-			print("Scanning %s '%s'. Found scriptable members:"%(cls['kind'], cls['name']))
-			for method in getScriptableMethods(cls):
-				print("\t%s %s (%s (%s))"%(method['kind'], method['name'], method['type'], ', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
-			for prop in getScriptableProperties(cls):
-				print("\t%s %s (%s)"%(prop['kind'], prop['name'], prop['type']))
-			members = getScriptableMethods(cls) + getScriptableProperties(cls)
-			types = getReferencedTypes(members)
-			print("%d raw types:"%len(types))
-			for t in types:
-				print("\t%s"%t)
-			typelist.update(getInternalTypes(types))
-			return {
-				'refid': cls['refid'],
-				'scriptable_members': members,
-				'referenced_types': types
-			}
 
-		hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
-		hifi_type_keys = set(hifi_types.keys())
+		names = [ x['name'] for x in entrypoints.itervalues() ]
+
+		used_types = set(names)
+		items_to_scan = list(entrypoints.itervalues())
+		scanned_items = {}
+
+		pool = Pool(processes=16)
+
+		''' do recursive scan, using basic multithreading to speed up the process if needed '''
+		while items_to_scan:
+			print('')
+			rs = pool.map(doScriptTrace, items_to_scan)
+			# rs = map(doScriptTrace, items_to_scan)
+			tl = set()
+			for item, ts in rs:
+				if ts is not None:
+					scanned_items[item['refid']] = item
+					tl |= ts
+
+			tl -= used_types
+			tl = expandTypes(tl)
+
+			# print("Found new types: %s"%(', '.join(tl)))
+			new_types = map(self.resolveTypename, tl)
+			used_types |= tl
+
+			hifi_types = filter(lambda t: t is not None, used_types)
+			# print("including %d hifi types: %s"%(len(hifi_types), hifi_types))
+			items_to_scan = [ self.loaded_items[t] for t in new_types if t is not None and t in self.loaded_items ]
+			bad_refids = [ refid for refid in new_types if refid is not None and refid not in self.loaded_items ]
+			if bad_refids:
+				print("BAD REFIDs: %s"%(', '.join(bad_refids)))
+			if items_to_scan:
+				print("FOUND SCRIPTABLE TYPES: %s (recursing)"%(', '.join([ "'%s'"%(x['name']) for x in items_to_scan ])))
+
+		print("done.\n")
 
 		def checkTypes(typelist):
 			builtin_types = set(['int', 'void', 'float', 'char', 'bool'])
 			qt_types = set(['QVector', 'QUuid', 'QVariantMap', 'QString'])
-			library_types = set(['glm::vec3', 'glm::vec3', 'glm::mat4', 'glm::quat'])
-			hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
-			hifi_type_keys = set(hifi_types.keys())
+			library_types = set(['glm::vec3', 'glm::vec2', 'glm::mat4', 'glm::quat'])
+			# hifi_types = dict([ (self.index[k]['name'], self.index[k]['refid']) for k in all_types if k in self.index ])
+			# hifi_type_keys = set(hifi_types.keys())
 
 			builtin_types &= typelist
 			typelist -= builtin_types
@@ -1040,45 +1172,36 @@ class DoxygenScanner(object):
 			library_types &= typelist
 			typelist -= library_types
 
-			hifi_types = dict([ (k, v) for k, v in hifi_types.iteritems() if k in typelist ])
-			typelist -= set(hifi_types.keys())
+			hifi_types = [ t for t in typelist if t in self.name_lookup ]
+			typelist -= set(hifi_types)
 
-			print("Used builtins: %s"%(list(builtin_types)))
-			print("Used qt types: %s"%(list(qt_types)))
-			print("Used library types: %s"%(list(library_types)))
-			print("Used hifi types: %s"%(hifi_types.keys()))
-			print("Unknown types: %s"%(list(typelist)))
+			# hifi_types = dict([ (k, v) for k, v in hifi_types.iteritems() if k in typelist ])
+			# typelist -= set(hifi_types.keys())
 
-		def scanRecursive(types, closedlist):
-			typelist, scannedItems = set(), {}
-			for k, t in types.iteritems():
-				if t['kind'] in ('struct', 'class'):
-					scannedItems[t['refid']] = scanClass(t, typelist)
-			print("%d types: %s"%(len(typelist), ', '.join(typelist)))
+			if builtin_types:
+				print("Used builtins: %s"%(list(builtin_types)))
+			if qt_types:
+				print("Used qt types: %s"%(list(qt_types)))
+			if library_types:
+				print("Used library types: %s"%(list(library_types)))
+			if hifi_types:
+				print("Used hifi types: %s"%(hifi_types))
+			if typelist:
+				print("Unknown types: %s"%(list(typelist)))
 
-			hftypes = (typelist & hifi_type_keys) - closedlist
-			closedlist |= typelist
+			return {
+				'builtins': builtin_types,
+				'qt_types': qt_types,
+				'library_types': library_types,
+				'hifi_types': hifi_types
+			}
 
-			print("Typelist: " + ', '.join(hftypes))
-			if len(hftypes) != 0:
-				print("Recursing " + ', '.join(hftypes))
-				print(dict([(k, hifi_types[k]) for k in hftypes ]))
-				newItems = scanRecursive(dict([ (k, self.loaded_items[hifi_types[k]]) for k in hftypes ]), closedlist)
-				scannedItems.update(newItems)
-			return scannedItems
-			openlist, closedlist  
-
-		typelist = set()
-		print(entrypoints.keys())
-		items = scanRecursive(entrypoints, typelist)
-		checkTypes(typelist)
-		for k, v in items.iteritems():
-			print("Scanned %s (%s)"%(self.index[v['refid']]['name'], k))
-		return items
-		
-
-
-
+		print("TYPE SUMMARY:")
+		typeinfo = checkTypes(used_types)
+		return {
+			'items': scanned_items,
+			'typeinfo': typeinfo
+		}
 
 def autobuild ():
 	''' Runs doxygen if the documentation has not already been built. '''

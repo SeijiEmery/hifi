@@ -1,6 +1,6 @@
 
 import os.path
-from scanner import ScriptApiScanner, autobuild
+from multithreaded_scanner import DoxygenScanner, autobuild
 # from itertools import filterfalse, tee
 import json
 import re
@@ -24,6 +24,13 @@ def partition(pred, iterable):
 
 
 
+
+
+
+
+
+
+
 ''' 
 TODO:
 - Overloads
@@ -32,7 +39,7 @@ TODO:
 
 '''
 
-
+'''
 class JsdocGenerator:
 	def __init__ (self, jsconfig):
 		with open(jsconfig, 'r') as f:
@@ -328,13 +335,23 @@ class JsdocGenerator:
 
 		print("ERROR: Unknown type '%s'"%type_)
 		return None
+'''
+
+class JsdocGenerator(object):
+	def __init__(self, config):
+		self.config = config
+
+	def generate(self, scanner):
+		items = scanner.runScriptTrace(['EntityScriptingInterface'])
+
+
 
 if __name__ == '__main__':
 	generator = JsdocGenerator('interface-api.json')
 
 	os.chdir('../../')		# cd to root dir
 	autobuild()
-	scanner = ScriptApiScanner('docs/xml')
+	scanner = DoxygenScanner('docs/xml')
 	generator.generate(scanner)
 
 
