@@ -18,6 +18,9 @@ def _addToListByKey(dict_, key, value):
 	else:
 		dict_[key] = [ value ]
 
+def filterNotEmpty(ls):
+	return [ x for x in ls if x ]
+
 def makeLookup(dict_):
 	def lookup(key):
 		return dict_[key]
@@ -327,7 +330,6 @@ def loadUnion(info, traceTypeInfo=False, printSummary=False):
 		obj['used_types'] = set()
 		for member in obj['members']:
 			obj['used_types'].add(member['type'])
-
 
 	if printSummary:
 		s = "Union %s (%s)"%(obj['name'], obj['refid'])
@@ -1052,7 +1054,20 @@ class DoxygenScanner(object):
 			if item['name'] in self.name_index:
 				self.name_index[item['name']].add(item['refid'])
 			else:
-				self.name_index[item['name']] = set([item['refid']])				
+				self.name_index[item['name']] = set([item['refid']])	
+
+			''' Add members '''
+			elems = ['methods', 'members', 'properties', 'vars', 'functions', 'unions', 'enums', 'types']
+			for elem in elems:
+				if elem in item:
+					for thing in item[elem]:
+						thing['parent'] = item['refid']
+						self.loaded_items[thing['refid']] = thing
+						if thing['name'] in self.name_index:
+							self.name_index[thing['name']].add(thing['refid'])
+						else:
+							self.name_index[thing['name']] = set(thing['refid'])
+
 
 	def resolveTypename(self, typename):
 		if not typename in self.name_lookup:
@@ -1083,8 +1098,8 @@ class DoxygenScanner(object):
 				unresolved.append(typename)
 			else:
 				entrypoints[refid] = self.loaded_items[refid]
-				print("Resolved '%s' to %s '%s'"%(typename, self.index[refid]['kind'], refid))
-				assert(self.index[refid]['kind'] == self.loaded_items[refid]['kind'])
+				print("Resolved '%s' to %s '%s'"%(typename, self.loaded_items[refid]['kind'], refid))
+				# assert(self.index[refid]['kind'] == self.loaded_items[refid]['kind'])
 		if unresolved:
 			print("Could not resolve: " + ', '.join(unresolved))
 
@@ -1191,6 +1206,29 @@ class DoxygenScanner(object):
 			'typeinfo': typeinfo
 		}
 
+def convertType(knowntypes, builtintypes):
+	def toJsType(cpptype):
+		cpptype = cpptype.replace('Q_INVOKABLE', '').replace('const', '').replace('&', '').strip()
+		# print(cpptype)
+		if '<' in cpptype:
+			# print("TEMPLATE")
+			template, params = cpptype.strip('>').split('<')
+			params = params.split(',')
+			template, params = toJsType(template), map(toJsType, params)
+			if template == 'Array':
+				return '%s[]'%(', '.join(params))
+			return '%s.<%s>'%(template, ', '.join(params))
+		if cpptype in builtintypes:
+			return builtintypes[cpptype]
+		if '::' in cpptype:
+			return '.'.join(filterNotEmpty(map(toJsType, cpptype.split('::'))))
+		if cpptype in knowntypes:
+			return cpptype
+		# print("UNKNOWN TYPE: %s"%(cpptype))
+		return cpptype
+		# return "??%s"%(cpptype)
+	return toJsType
+
 def autobuild ():
 	''' Runs doxygen if the documentation has not already been built. '''
 	if not os.path.isfile('docs/config.txt'):
@@ -1204,6 +1242,60 @@ def autobuild ():
 
 	assert(os.path.isfile('docs/xml/index.xml'))
 
+script_api = {
+	"ScriptEngine": "Script",
+	"AudioScriptingInterface": "Audio",
+	"ControllerScriptingInterface": "Controller",
+	"EntityScriptingInterface": "Entities",
+	"Quat": "Quat",
+	"Vec3": "Vec3",
+	"AnimationCache": "AnimationCache",
+	"MyAvatar": "MyAvatar",
+	"AvatarHashMap": "AvatarList",
+	"Camera": "Camera",
+	"SpeechRecognizer": "SpeechRecognizer",
+	"ClipboardScriptingInterface": "Clipboard",
+	"Overlays": "Overlays",
+	"WindowScriptingInterface": "Window",
+	#"location": property LocationScriptingInterface::locationGetter/locationSetter
+	"WebWindowClass::constructor": "WebWindow",
+	"MenuScriptingInterface": "Menu",
+	"SettingsScriptingInterface": "Settings",
+	"AudioDeviceScriptingInterface": "AudioDevice",
+	"AnimationCache": "AnimationCache",
+	"SoundCache": "SoundCache",
+	"AccountScriptingInterface": "Account",
+	"GlobalServicesScriptingInterface": "GlobalServices",
+	"AvatarManager": "AvatarManager",
+	"UndoStackScriptingInterface": "UndoStack",
+	"LODManager": "LODManager",
+	"PathUtils": "Paths",
+	"HMDScriptingInterface": "HMD",
+	#"HMDScriptingInterface::getHUDLookAtPosition2D": "getHudLookAtPosition2D",
+	#"HMDScriptingInterface::getHUDLookAtPosition3D": "getHUDLookAtPosition3D",
+	"SceneScriptingInterface": "Scene",
+	"RunningScriptsWidget": "ScriptDiscoveryService",
+	"XMLHttpRequestClass::constructor": "XMLHttpRequest",
+	"AudioEffectOptions::constructor": "AudioEffectOptions",
+	#"ScriptEngine::debugPrint": "print",
+
+	#"": "version",		builtin
+	#"": "gc",			builtin
+	#"": "ArrayBuffer",
+	#"": "DataView",
+	#"": "Int8Array",
+	#"": "Uint8Array",
+	#"": "Uint8ClampedArray",
+	#"": "Int16Array",
+	#"": "Uint16Array",
+	#"": "Int32Array",
+	#"": "Uint32Array",
+	#"": "Float32Array",
+	#"": "Float64Array",
+}
+
+
+
 if __name__ == '__main__':
 	os.chdir('../../')	# Navigate to root hifi directory
 	autobuild()
@@ -1216,133 +1308,6 @@ if __name__ == '__main__':
 	USE_MULTITHREADING = True
 	# scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
 
-	script_api = {
-		"Script": "ScriptEngine",
-		"Audio": "AudioScriptingInterface",
-		"Controller": "ControllerScriptingInterface",
-		"Entities": "EntityScriptingInterface",
-		"Quat": "Quat",
-		"Vec3": "Vec3",
-		"AnimationCache": "AnimationCache",
-		"MyAvatar": "MyAvatar",
-		"AvatarList": "AvatarHashMap",
-		"Camera": "Camera",
-		"SpeechRecognizer": "SpeechRecognizer",
-		"Clipboard": "ClipboardScriptingInterface",
-		"Overlays": "Overlays",
-		"Window": "WindowScriptingInterface",
-		#"location": property LocationScriptingInterface::locationGetter/locationSetter
-		"WebWindow": "WebWindowClass::constructor",
-		"Menu": "MenuScriptingInterface",
-		"Settings": "SettingsScriptingInterface",
-		"AudioDevice": "AudioDeviceScriptingInterface",
-		"AnimationCache": "AnimationCache",
-		"SoundCache": "SoundCache",
-		"Account": "AccountScriptingInterface",
-		"GlobalServices": "GlobalServicesScriptingInterface",
-		"AvatarManager": "AvatarManager",
-		"UndoStack": "UndoStackScriptingInterface",
-		"LODManager": "LODManager",
-		"Paths": "PathUtils",
-		"HMD": "HMDScriptingInterface",
-		#"getHudLookAtPosition2D": "HMDScriptingInterface::getHUDLookAtPosition2D",
-		#"getHUDLookAtPosition3D": "HMDScriptingInterface::getHUDLookAtPosition3D",
-		"Scene": "SceneScriptingInterface",
-		"ScriptDiscoveryService": "RunningScriptsWidget",
-		"XMLHttpRequest": "XMLHttpRequestClass::constructor",
-		"AudioEffectOptions": "AudioEffectOptions::constructor",
-		#"print": "ScriptEngine::debugPrint",
-
-		#"version": "",		builtin
-		#"gc": "",			builtin
-		#"ArrayBuffer": "",
-		#"DataView": "",
-		#"Int8Array": "",
-		#"Uint8Array": "",
-		#"Uint8ClampedArray": "",
-		#"Int16Array": "",
-		#"Uint16Array": "",
-		#"Int32Array": "",
-		#"Uint32Array": "",
-		#"Float32Array": "",
-		#"Float64Array": "",
-	}
-
-	scanner.runScriptTrace(script_api.values())
-
-
-
-
-
-
-
-	# scanner.debugFindThingWithProperties()
-	# scanner.debugPrintParamInnerTags()
-	# print("scanner.scanType('Application')")
-	# print(scanner.getScriptableInfo(["Application"]))
-	# print("scanner.scanType('EntityScriptingInterface')")
-	# scanner.getScriptableInfo(['EntityScriptingInterface'])
-
-	# scanner.debugGetSectionKindsForProject()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	scanner.runScriptTrace(script_api.keys())
 
 

@@ -1,36 +1,7 @@
 
 import os
 import sys
-from scanner import DoxygenScanner, autobuild
-
-
-
-def filterNotEmpty(ls):
-	return [ x for x in ls if x ]
-
-
-def convertType(knowntypes, builtintypes):
-	def toJsType(cpptype):
-		cpptype = cpptype.replace('Q_INVOKABLE', '').replace('const', '').replace('&', '').strip()
-		# print(cpptype)
-		if '<' in cpptype:
-			# print("TEMPLATE")
-			template, params = cpptype.strip('>').split('<')
-			params = params.split(',')
-			template, params = toJsType(template), map(toJsType, params)
-			if template == 'Array':
-				return '%s[]'%(', '.join(params))
-			return '%s.<%s>'%(template, ', '.join(params))
-		if cpptype in builtintypes:
-			return builtintypes[cpptype]
-		if '::' in cpptype:
-			return '.'.join(filterNotEmpty(map(toJsType, cpptype.split('::'))))
-		if cpptype in knowntypes:
-			return cpptype
-		# print("UNKNOWN TYPE: %s"%(cpptype))
-		return cpptype
-		# return "??%s"%(cpptype)
-	return toJsType
+from scanner import DoxygenScanner, autobuild, convertType, script_api
 
 def toJsType(cpptype, knowntypes):
 	_toJsType = lambda t: toJsType(t, knowntypes)
@@ -71,7 +42,7 @@ def toJsTypeWithApi(api):
 		return toJsType(cpptype, keys)
 	return convert
 
-def dump_scriptable_info(scan_output, api):
+def dump_scriptable_info(scan_output, api, scanner):
 	print("")
 	print("-- Api dump --")
 	print("")
@@ -131,6 +102,19 @@ def dump_scriptable_info(scan_output, api):
 			print("\t\tdescr: %s"%(method['description']['details']))
 		if method['description']['inbody']:
 			print("\t\tinbody description: %s"%(method['description']['inbody']))
+		if method['referencedby']:
+			print("\tCalled from:")
+			for ref in method['referencedby']:
+				item = scanner.loaded_items[ref] if ref in scanner.loaded_items else None
+				if item:
+					if item['parent'] and item['parent'] in scanner.loaded_items:
+						name = scanner.loaded_items[item['parent']]['name'] + '::' + item['name']
+					else:
+						name = item['name']
+					print("\t\t%s (%s:%s)"%(name, item['file'], item['line']))
+				else:
+					print("\t<%s>"%(ref))
+	
 		print("\t(%s, line %s)"%(method['file'], method['line']))
 		print("")
 	
@@ -162,60 +146,8 @@ if __name__ == '__main__':
 	scanner = DoxygenScanner('docs/xml')
 	scanner.loadIndex()
 
-	script_api = {
-		"ScriptEngine": "Script",
-		"AudioScriptingInterface": "Audio",
-		"ControllerScriptingInterface": "Controller",
-		"EntityScriptingInterface": "Entities",
-		"Quat": "Quat",
-		"Vec3": "Vec3",
-		"AnimationCache": "AnimationCache",
-		"MyAvatar": "MyAvatar",
-		"AvatarHashMap": "AvatarList",
-		"Camera": "Camera",
-		"SpeechRecognizer": "SpeechRecognizer",
-		"ClipboardScriptingInterface": "Clipboard",
-		"Overlays": "Overlays",
-		"WindowScriptingInterface": "Window",
-		#"location": property LocationScriptingInterface::locationGetter/locationSetter
-		"WebWindowClass::constructor": "WebWindow",
-		"MenuScriptingInterface": "Menu",
-		"SettingsScriptingInterface": "Settings",
-		"AudioDeviceScriptingInterface": "AudioDevice",
-		"AnimationCache": "AnimationCache",
-		"SoundCache": "SoundCache",
-		"AccountScriptingInterface": "Account",
-		"GlobalServicesScriptingInterface": "GlobalServices",
-		"AvatarManager": "AvatarManager",
-		"UndoStackScriptingInterface": "UndoStack",
-		"LODManager": "LODManager",
-		"PathUtils": "Paths",
-		"HMDScriptingInterface": "HMD",
-		#"HMDScriptingInterface::getHUDLookAtPosition2D": "getHudLookAtPosition2D",
-		#"HMDScriptingInterface::getHUDLookAtPosition3D": "getHUDLookAtPosition3D",
-		"SceneScriptingInterface": "Scene",
-		"RunningScriptsWidget": "ScriptDiscoveryService",
-		"XMLHttpRequestClass::constructor": "XMLHttpRequest",
-		"AudioEffectOptions::constructor": "AudioEffectOptions",
-		#"ScriptEngine::debugPrint": "print",
-
-		#"": "version",		builtin
-		#"": "gc",			builtin
-		#"": "ArrayBuffer",
-		#"": "DataView",
-		#"": "Int8Array",
-		#"": "Uint8Array",
-		#"": "Uint8ClampedArray",
-		#"": "Int16Array",
-		#"": "Uint16Array",
-		#"": "Int32Array",
-		#"": "Uint32Array",
-		#"": "Float32Array",
-		#"": "Float64Array",
-	}
-
 	rs = scanner.runScriptTrace(script_api.keys())
-	dump_scriptable_info(rs, script_api)
+	dump_scriptable_info(rs, script_api, scanner)
 
 
 
