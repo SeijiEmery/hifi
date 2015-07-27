@@ -1,7 +1,6 @@
 
 import os
-from multithreaded_scanner import DoxygenScanner, autobuild
-
+from scanner import DoxygenScanner, autobuild
 
 def dump_property(prop):
 	print("\t%s %s: %s"%(prop['kind'], prop['name'], prop['type']))

@@ -1,6 +1,6 @@
 
 import os.path
-from multithreaded_scanner import DoxygenScanner, autobuild
+from scanner import DoxygenScanner, autobuild
 # from itertools import filterfalse, tee
 import json
 import re
@@ -358,8 +358,7 @@ class JsdocGenerator(object):
 
 			s = '%s\n%s\n\n'%(doc, stub)
 			for method in cls['scriptable']['methods']:
-				
-
+				pass
 
 			return "CLASS %s\n"%(cls['name'])
 
