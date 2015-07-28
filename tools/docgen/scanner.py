@@ -65,8 +65,8 @@ def getChildInnerXml(node, tag, **kwargs):
 	return getInnerXml(getChildNode(node, tag), **kwargs)
 
 def loadIndex(xmlpath, index_file = 'index.xml'):
-	''' Loads the doxygen index.xml file at index_path, and returns a dict representation
-	of its contents, OR an exception if it fails. '''
+	''' Loads a doxygen index file from index.xml, and returns a dict representation of its contents.
+	Called by DoxygenScanner.loadIndex(); this call is a prerequisite for everything else. '''
 
 	path  = os.path.join(xmlpath, index_file)
 	index = ElementTree.parse(path).getroot()
@@ -259,8 +259,8 @@ def parseEnum(node):
 			# 'line': getChildNode(value, 'location').attrib['line'] if getChildNode(value, 'location') else None,
 		} for value in node.iter('enumvalue')],
 		'description': getDescription(node),
-		# 'file': loc.attrib['file'] if loc else None,
-		# 'line': loc.attrib['line'] if loc else None
+		'file': loc.attrib['file'] if loc is not None else None,
+		'line': loc.attrib['line'] if loc is not None else None
 	}
 	# print(enum)
 	return enum
@@ -738,11 +738,36 @@ def doScriptTrace(item, debugPrint=True):
 		cls['scriptable'] = None
 		return cls, None
 
+	def scanEnum(enum):
+		enum['scriptable'] = None
+		return enum, None
+
+	def scanFunction(func, is_exposed=False):
+		if is_exposed or 'Q_INVOKABLE' in func['type'] or (func['kind'] in ('signal', 'slot') and method['prot'] == 'public'):
+			print("EXPOSED FUNCTION: %s"%func['name'])
+			exposed_types = set([ p['type'] for p in func['params']])
+			exposed_types.add(func['type'])
+
+			func['scriptable'] = {
+				'methods': [func],
+				'properties': [],
+				'referenced_types': exposed_types
+			}
+			return func, exposed_types
+		else:
+			print("NON EXPOSED FUNCTION: %s"%func['name'])
+			func['scriptable'] = None
+			return func, None
+
 	# print("Scanning %s %s"%(item['kind'], item['name']))
 	# print(item.keys())
 
 	if item['kind'] in ('class', 'struct'):
 		item, typelist = scanClass(item)
+	elif item['kind'] == 'enum':
+		item, typelist = scanEnum(item)
+	elif item['kind'] == 'function':
+		item, typelist = scanFunction(item, True)
 	else:
 		print_("Can't parse %s %s"%(item['kind'], item['name']))
 		return item, None
@@ -1028,21 +1053,6 @@ class DoxygenScanner(object):
 		# output = [ tmp.get() for tmp in rs ]
 		# print(len(rs))
 
-		''' Apply enum fixes '''
-		for r in rs:
-			self.loaded_items[r['refid']] = r
-			if 'enums' in r:
-				for enum in r['enums']:
-					self.loaded_items[enum['refid']] = enum
-					# if not enum['refid'] in self.index:
-					# 	self.index[enum['refid']] = enum
-					enum['parent'] = r['refid']
-					enum['name'] = r['name'] + '::' + enum['name']
-					# print(self.cat_lookup['enums'])
-					self.cat_lookup['enums'].append(enum['refid'])
-					print("Registering type %s: %s"%(enum['name'], enum['refid']))
-		print('Enums: %s'%', '.join([ x['name'] for _, x in self.loaded_items.iteritems() if x['kind'] == 'enum']))
-
 		''' Insert everything into loaded_items and rebuild name_index '''
 		self.loaded_items = {}
 		self.name_index = {}
@@ -1063,10 +1073,19 @@ class DoxygenScanner(object):
 					for thing in item[elem]:
 						thing['parent'] = item['refid']
 						self.loaded_items[thing['refid']] = thing
+						if not item['name'] in thing['name']:
+							thing['name'] = item['name'] + '::' + thing['name']
+
 						if thing['name'] in self.name_index:
 							self.name_index[thing['name']].add(thing['refid'])
 						else:
 							self.name_index[thing['name']] = set(thing['refid'])
+
+			''' Add enums '''
+			if 'enums' in item:
+				for enum in item['enums']:
+					self.cat_lookup['enums'].append(enum['refid'])
+
 
 
 	def resolveTypename(self, typename):
@@ -1133,7 +1152,10 @@ class DoxygenScanner(object):
 		''' do recursive scan, using basic multithreading to speed up the process if needed '''
 		while items_to_scan:
 			print('')
-			rs = pool.map(doScriptTrace, items_to_scan)
+			if USE_MULTITHREADING:
+				rs = pool.map(doScriptTrace, items_to_scan)
+			else:
+				rs = map(doScriptTrace, items_to_scan)
 			# rs = map(doScriptTrace, items_to_scan)
 			tl = set()
 			for item, ts in rs:
@@ -1305,7 +1327,7 @@ if __name__ == '__main__':
 
 	# scanner.loadEverything(printSummary=True, traceTypeInfo=True)
 
-	USE_MULTITHREADING = True
+	USE_MULTITHREADING = False
 	# scanner.runScriptTrace(['EntityScriptingInterface', 'SceneScriptingInterface', 'ControllerScriptingInterface', 'foo', 'blarg'])
 
 	scanner.runScriptTrace(script_api.keys())
