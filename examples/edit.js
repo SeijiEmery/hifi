@@ -13,8 +13,6 @@
 
 HIFI_PUBLIC_BUCKET = "http://s3.amazonaws.com/hifi-public/";
 
-
-
 Script.include([
     "libraries/stringHelpers.js",
     "libraries/dataViewHelpers.js",
@@ -54,6 +52,10 @@ selectionManager.addEventListener(function() {
 var toolIconUrl = HIFI_PUBLIC_BUCKET + "images/tools/";
 var toolHeight = 50;
 var toolWidth = 50;
+
+var DEGREES_TO_RADIANS = Math.PI / 180.0;
+var RADIANS_TO_DEGREES = 180.0 / Math.PI;
+var epsilon = 0.001;
 
 var MIN_ANGULAR_SIZE = 2;
 var MAX_ANGULAR_SIZE = 45;
@@ -316,14 +318,18 @@ var toolBar = (function () {
                         print("Resize failed: timed out waiting for model (" + url + ") to load");
                     }
                 } else {
-                    entityProperties.dimensions = naturalDimensions;
-                    Entities.editEntity(entityId, entityProperties);
+                    Entities.editEntity(entityId, { dimensions: naturalDimensions });
+
+                    // Reset selection so that the selection overlays will be updated
+                    selectionManager.setSelections([entityId]);
                 }
             }
 
+            selectionManager.setSelections([entityId]);
+
             Script.setTimeout(resize, RESIZE_INTERVAL);
         } else {
-            print("Can't add model: Model would be out of bounds.");
+            Window.alert("Can't add model: Model would be out of bounds.");
         }
     }
 
@@ -368,7 +374,7 @@ var toolBar = (function () {
 
                                 });
             } else {
-                print("Can't create box: Box would be out of bounds.");
+                Window.alert("Can't create box: Box would be out of bounds.");
             }
             return true;
         }
@@ -384,7 +390,7 @@ var toolBar = (function () {
                                 color: { red: 255, green: 0, blue: 0 }
                                 });
             } else {
-                print("Can't create sphere: Sphere would be out of bounds.");
+                Window.alert("Can't create sphere: Sphere would be out of bounds.");
             }
             return true;
         }
@@ -407,7 +413,7 @@ var toolBar = (function () {
                                 cutoff: 180, // in degrees
                                 });
             } else {
-                print("Can't create Light: Light would be out of bounds.");
+                Window.alert("Can't create Light: Light would be out of bounds.");
             }
             return true;
         }
@@ -427,7 +433,7 @@ var toolBar = (function () {
                                 lineHeight: 0.06
                                 });
             } else {
-                print("Can't create box: Text would be out of bounds.");
+                Window.alert("Can't create box: Text would be out of bounds.");
             }
             return true;
         }
@@ -443,7 +449,7 @@ var toolBar = (function () {
                                 sourceUrl: "https://highfidelity.com/",
                                 });
             } else {
-                print("Can't create Web Entity: would be out of bounds.");
+                Window.alert("Can't create Web Entity: would be out of bounds.");
             }
             return true;
         }
@@ -458,7 +464,7 @@ var toolBar = (function () {
                                 dimensions: { x: 10, y: 10, z: 10 },
                                 });
             } else {
-                print("Can't create box: Text would be out of bounds.");
+                Window.alert("Can't create box: Text would be out of bounds.");
             }
             return true;
         }
@@ -476,7 +482,7 @@ var toolBar = (function () {
                     voxelSurfaceStyle: 1
                 });
             } else {
-                print("Can't create PolyVox: would be out of bounds.");
+                Window.alert("Can't create PolyVox: would be out of bounds.");
             }
             return true;
         }
@@ -658,7 +664,9 @@ function mouseMove(event) {
 
 function handleIdleMouse() {
     idleMouseTimerId = null;
-    highlightEntityUnderCursor(lastMousePosition, true);
+    if (isActive) {
+        highlightEntityUnderCursor(lastMousePosition, true);
+    }   
 }
 
 function highlightEntityUnderCursor(position, accurateRay) {
@@ -1060,13 +1068,16 @@ function importSVO(importURL) {
         if (Clipboard.getClipboardContentsLargestDimension() < VERY_LARGE) {
             position = getPositionToCreateEntity();
         }
-        var pastedEntityIDs = Clipboard.pasteEntities(position);
+        if (position.x > 0 && position.y > 0 && position.z > 0) {
+            var pastedEntityIDs = Clipboard.pasteEntities(position);
 
-        if (isActive) {
-            selectionManager.setSelections(pastedEntityIDs);
-        }
-
+            if (isActive) {
+                selectionManager.setSelections(pastedEntityIDs);
+            }
         Window.raiseMainWindow();
+        } else {
+            Window.alert("Can't import objects: objects would be out of bounds.");
+        }
     } else {
         Window.alert("There was an error importing the entity file.");
     }
@@ -1216,7 +1227,13 @@ PropertiesTool = function(opts) {
             var entity = {};
             entity.id = selectionManager.selections[i];
             entity.properties = Entities.getEntityProperties(selectionManager.selections[i]);
-            entity.properties.rotation = Quat.safeEulerAngles(entity.properties.rotation);
+            if (entity.properties.rotation !== undefined) {
+                entity.properties.rotation = Quat.safeEulerAngles(entity.properties.rotation);
+            }
+            if (entity.properties.keyLightDirection !== undefined) {
+                entity.properties.keyLightDirection = Vec3.multiply(RADIANS_TO_DEGREES, Vec3.toPolar(entity.properties.keyLightDirection));
+                entity.properties.keyLightDirection.z = 0.0;
+            }
             selections.push(entity);
         }
         data.selections = selections;
@@ -1244,6 +1261,10 @@ PropertiesTool = function(opts) {
                     var rotation = data.properties.rotation;
                     data.properties.rotation = Quat.fromPitchYawRollDegrees(rotation.x, rotation.y, rotation.z);
                 }
+                if (data.properties.keyLightDirection !== undefined) {
+                    data.properties.keyLightDirection = Vec3.fromPolar(
+                        data.properties.keyLightDirection.x * DEGREES_TO_RADIANS, data.properties.keyLightDirection.y * DEGREES_TO_RADIANS);
+                } 
                 Entities.editEntity(selectionManager.selections[0], data.properties);
                 if (data.properties.name != undefined) {
                     entityListTool.sendUpdate();

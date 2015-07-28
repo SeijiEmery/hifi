@@ -165,8 +165,6 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 			print("Not scriptable")
 		print("\tfile: %s, line %s"%(enum['file'], enum['line']))
 		print("")
-
-
 	dump_items()
 
 
