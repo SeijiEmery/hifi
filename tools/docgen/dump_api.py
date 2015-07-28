@@ -94,7 +94,7 @@ def dump_scriptable_info(scan_output, api, scanner):
 		print("\t%s %s"%(method['kind'], method['name']))
 		print('\t\tcpp return: %s'%(method['type']))
 		print('\t\tcpp params: %s'%(', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
-		print('\t\tjs return: {%s}'%(method['type']))
+		print('\t\tjs return: {%s}'%(toJsType(method['type'])))
 		print('\t\tjs params: %s'%(', '.join([
 			'{%s} %s'%(toJsType(p['type']), p['name']) for p in method['params'] ])))
 		if method['description']['brief']:
