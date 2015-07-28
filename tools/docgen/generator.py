@@ -424,7 +424,10 @@ class JsdocGenerator(object):
 			if cls['scriptable']:
 				for method in cls['scriptable']['methods']:
 					s += '\n'
-					lines = ['']
+					lines = [
+						'',
+						'%s %s.%s'%(method['kind'], cls['name'], method['name'])
+					]
 					lines += list(getDescriptionLines(method))
 					lines += [
 						'@function %s'%method['name'], 
@@ -441,11 +444,11 @@ class JsdocGenerator(object):
 						'%s:%s'%(method['file'], method['line'])
 					] 
 					s += makeDocstring(lines) + '\n'
-					s += method_stub_template.format(
-						decl='',
-						name='%s.%s'%(sanitizeName(cls['name']), sanitizeName(sanitizeName(method['name']))),
-						args=', '.join([ sanitizeName(p['name']) for p in method['params']])
-					) + '\n'
+					# s += method_stub_template.format(
+					# 	decl='',
+					# 	name='%s.%s'%(sanitizeName(cls['name']), sanitizeName(sanitizeName(method['name']))),
+					# 	args=', '.join([ sanitizeName(p['name']) for p in method['params']])
+					# ) + '\n'
 			return s
 
 		def genNonScriptable(item):
@@ -459,7 +462,7 @@ class JsdocGenerator(object):
 			else:
 				s = 'var '
 			s += "/** %s %s (NON-SCRIPTABLE) */"%(item['kind'], sanitizeName(item['name'])) + '\n'
-			s += "%s = {};"%(sanitizeName(item['name']).replace('::', '.')) + '\n\n'
+			s += "%s = {};"%(name) + '\n\n'
 			return s
 
 		generators = {

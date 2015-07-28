@@ -5,7 +5,7 @@ from scanner import DoxygenScanner, autobuild, convertType, script_api
 
 def toJsType(cpptype, knowntypes):
 	_toJsType = lambda t: toJsType(t, knowntypes)
-	cpptype = cpptype.replace('Q_INVOKABLE', '').replace('const', '').replace('&', '').strip()
+	cpptype = cpptype.strip().replace('Q_INVOKABLE', '').replace('const', '').replace('&', '').strip()
 	# print(cpptype)
 	if '<' in cpptype:
 		# print("TEMPLATE")
@@ -69,7 +69,7 @@ def dump_scriptable_info(scan_output, api, scanner):
 		'glm::vec3': 'glm::vec3',
 		'glm::quat': 'glm::quat',
 		'glm::vec2': 'glm::vec2',
-		'void': None
+		'void': 'undefined'
 	})
 
 	def dump_property(prop):	
@@ -92,16 +92,17 @@ def dump_scriptable_info(scan_output, api, scanner):
 	
 	def dump_method(method):	
 		print("\t%s %s"%(method['kind'], method['name']))
-		print('\tcpp type: %s (%s)'%(method['type'], ', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
-		type_ = toJsType(method['type'])
-		print('\tjs type: %s(%s)'%('{%s} '%(type_) if type_ else '', ', '.join([
+		print('\t\tcpp return: %s'%(method['type']))
+		print('\t\tcpp params: %s'%(', '.join([ '%s %s'%(p['type'], p['name']) for p in method['params'] ])))
+		print('\t\tjs return: {%s}'%(method['type']))
+		print('\t\tjs params: %s'%(', '.join([
 			'{%s} %s'%(toJsType(p['type']), p['name']) for p in method['params'] ])))
 		if method['description']['brief']:
-			print("\t\tbrief: %s"%(method['description']['brief']))
+			print("\t\tbrief description:\n\t\t\t%s"%(method['description']['brief'].replace('para>', 'p>')))
 		if method['description']['details']:
-			print("\t\tdescr: %s"%(method['description']['details']))
+			print("\t\tdetailed description:\n\t\t\t%s"%(method['description']['details'].replace('para>', 'p>')))
 		if method['description']['inbody']:
-			print("\t\tinbody description: %s"%(method['description']['inbody']))
+			print("\t\tinbody description:\n\t\t\t%s"%(method['description']['inbody'].replace('para>', 'p>')))
 		if method['referencedby']:
 			print("\tCalled from:")
 			for ref in method['referencedby']:
@@ -115,7 +116,7 @@ def dump_scriptable_info(scan_output, api, scanner):
 				else:
 					print("\t<%s>"%(ref))
 	
-		print("\t(%s, line %s)"%(method['file'], method['line']))
+		print("\tfile: %s, line %s"%(method['file'], method['line']))
 		print("")
 	
 	def dump_class(cls, jsname):
@@ -147,8 +148,17 @@ if __name__ == '__main__':
 	scanner.loadIndex()
 
 	rs = scanner.runScriptTrace(script_api.keys())
+
+	''' Hijack stdout to write to a file '''
+	out_ = sys.stdout
+	out_file = 'tools/docgen/api.txt'
+	sys.stdout = open(out_file, 'w')
+
 	dump_scriptable_info(rs, script_api, scanner)
-
-
-
+	
+	sys.stdout.close()
+	sys.stdout = out_
+	with open (out_file, 'r') as f:
+		print(f.read())
+	print("output written to %s"%(out_file))
 
