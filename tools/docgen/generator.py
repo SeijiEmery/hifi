@@ -36,15 +36,16 @@ class JsdocGenerator(object):
 			'QVariant': 'object',
 			'QVariantList': 'Array',
 			'QVariantMap': 'object',
+			'QScriptValue': 'object',
 			'int':   'number',
 			'unsigned int': 'number',
 			'float': 'number',
 			'bool': 'bool',
 			'std::string': 'string',
 			'std::vector': 'Array',
-			'glm::vec3': 'object',
-			'glm::quat': 'object',
-			'glm::vec2': 'object',
+			'glm::vec3': '{x: number, y: number, z: number}',
+			'glm::quat': '{x: number, y: number, z: number, w: number}',
+			'glm::vec2': '{x: number, y: number, z: number}',
 			'QObject *': 'object',
 			'void': 'undefined'
 		})
@@ -80,12 +81,14 @@ class JsdocGenerator(object):
 
 		def fmtType(type_):
 			jstype = self.toJsType(type_)
+			if '{' in jstype and ']' in jstype:
+				return 'Array'
 			jstypes.add('{%s}'%jstype)
 			return '{%s} '%jstype# if jstype != 'object' else ''
 
 		def genClass(cls):
 			lines = [ '' ]
-			lines += [ cls['name'].split('::')[-1] ]
+			# lines += [ cls['name'].split('::')[-1] ]
 			lines += [ '@namespace ']
 			if len(cls['name'].split('::')) > 1:
 				lines += [ '@memberof %s'%('.'.join(cls['name'].split('::')[:-1])) ]
@@ -108,13 +111,14 @@ class JsdocGenerator(object):
 						'@function %s'%method['name'].split('::')[-1], 
 						'@memberof %s'%cls['name'].replace('::', '.'),
 					]
-					lines += list(getDescriptionLines(method))
 					for p in method['params']:
 						lines += ['@param %s%s'%(fmtType(p['type']), sanitizeName(p['name']))]
 					if self.toJsType(method['type']) != 'undefined':
 						lines += ['@returns {%s}'%(self.toJsType(method['type']))]
 						jstypes.add('{%s}'%self.toJsType(method['type']))
 					s += makeDocstring(lines) + '\n'
+					s += '%s = function(%s){};'%(method['name'].replace('::', '.'),
+						', '.join([p['name'].replace('function', '_function') for p in method['params']]))
 			return s
 
 		def genNonScriptable(item):
@@ -156,9 +160,7 @@ class JsdocGenerator(object):
 				s += genNonScriptable(item)
 		print(s)
 
-		print("js types:\n\t" + '\n\t'.join(jstypes))
-
-
+		# print("js types:\n\t" + '\n\t'.join(jstypes))
 		return s
 
 	def generateMethodStub(self, objdecl, method, rval):
