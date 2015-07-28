@@ -38,14 +38,9 @@ public:
     // Let's try to avoid to do that as much as possible!
     virtual void syncCache();
 
-    // Render Batch create a local Context and execute the batch with it
-    // WARNING:
-    // if syncCache is true, then the gpu::GLBackend will synchornize
-    // its cache with the current gl state and it's BAD
-    // If you know you don't rely on any state changed by naked gl calls then
-    // leave to false where it belongs
-    // if true, the needed resync IS EXPENSIVE
-    static void renderBatch(Batch& batch, bool syncCache = false);
+    // This is the ugly "download the pixels to sysmem for taking a snapshot"
+    // Just avoid using it, it's ugly and will break performances
+    virtual void downloadFramebuffer(const FramebufferPointer& srcFramebuffer, const Vec4i& region, QImage& destImage);
 
     static bool checkGLError(const char* name = nullptr);
 
@@ -106,10 +101,6 @@ public:
     };
     static GLShader* syncGPUObject(const Shader& shader);
     static GLuint getShaderID(const ShaderPointer& shader);
-
-    // FIXME: Please remove these 2 calls once the text renderer doesn't use naked gl calls anymore
-    static void loadMatrix(GLenum target, const glm::mat4 & m);
-    static void fetchMatrix(GLenum target, glm::mat4 & m);
 
     class GLState : public GPUObject {
     public:
@@ -181,12 +172,25 @@ public:
     class GLFramebuffer : public GPUObject {
     public:
         GLuint _fbo = 0;
+        std::vector<GLenum> _colorBuffers;
 
         GLFramebuffer();
         ~GLFramebuffer();
     };
     static GLFramebuffer* syncGPUObject(const Framebuffer& framebuffer);
     static GLuint getFramebufferID(const FramebufferPointer& framebuffer);
+
+    class GLQuery : public GPUObject {
+    public:
+        GLuint _qo = 0;
+        GLuint64 _result = 0;
+
+        GLQuery();
+        ~GLQuery();
+    };
+    static GLQuery* syncGPUObject(const Query& query);
+    static GLuint getQueryID(const QueryPointer& query);
+
 
     static const int MAX_NUM_ATTRIBUTES = Stream::NUM_INPUT_SLOTS;
     static const int MAX_NUM_INPUT_BUFFERS = 16;
@@ -198,7 +202,7 @@ public:
     void do_setStateFillMode(int32 mode);
     void do_setStateCullMode(int32 mode);
     void do_setStateFrontFaceClockwise(bool isClockwise);
-    void do_setStateDepthClipEnable(bool enable);
+    void do_setStateDepthClampEnable(bool enable);
     void do_setStateScissorEnable(bool enable);
     void do_setStateMultisampleEnable(bool enable);
     void do_setStateAntialiasedLineEnable(bool enable);
@@ -215,7 +219,21 @@ public:
 
     void do_setStateColorWriteMask(uint32 mask);
 
+    // Repporting stats of the context
+    class Stats {
+    public:
+        int _ISNumFormatChanges = 0;
+        int _ISNumInputBufferChanges = 0;
+        int _ISNumIndexBufferChanges = 0;
+
+        Stats() {}
+        Stats(const Stats& stats) = default;
+    };
+
+    void getStats(Stats& stats) const { stats = _stats; }
+
 protected:
+    Stats _stats;
 
     // Draw Stage
     void do_draw(Batch& batch, uint32 paramOffset);
@@ -223,18 +241,17 @@ protected:
     void do_drawInstanced(Batch& batch, uint32 paramOffset);
     void do_drawIndexedInstanced(Batch& batch, uint32 paramOffset);
 
-    void do_clearFramebuffer(Batch& batch, uint32 paramOffset);
-
     // Input Stage
     void do_setInputFormat(Batch& batch, uint32 paramOffset);
     void do_setInputBuffer(Batch& batch, uint32 paramOffset);
     void do_setIndexBuffer(Batch& batch, uint32 paramOffset);
-    
-    // Synchronize the state cache of this Backend with the actual real state of the GL Context
+
+    void initInput();
+    void killInput();
     void syncInputStateCache();
     void updateInput();
     struct InputStageState {
-        bool _invalidFormat;
+        bool _invalidFormat = true;
         Stream::FormatPointer _format;
 
         typedef std::bitset<MAX_NUM_INPUT_BUFFERS> BuffersState;
@@ -243,6 +260,7 @@ protected:
         Buffers _buffers;
         Offsets _bufferOffsets;
         Offsets _bufferStrides;
+        std::vector<GLuint> _bufferVBOs;
 
         BufferPointer _indexBuffer;
         Offset _indexBufferOffset;
@@ -251,6 +269,8 @@ protected:
         typedef std::bitset<MAX_NUM_ATTRIBUTES> ActivationCache;
         ActivationCache _attributeActivation;
 
+        GLuint _defaultVAO;
+
         InputStageState() :
             _invalidFormat(true),
             _format(0),
@@ -258,10 +278,12 @@ protected:
             _buffers(_buffersState.size(), BufferPointer(0)),
             _bufferOffsets(_buffersState.size(), 0),
             _bufferStrides(_buffersState.size(), 0),
+            _bufferVBOs(_buffersState.size(), 0),
             _indexBuffer(0),
             _indexBufferOffset(0),
             _indexBufferType(UINT32),
-            _attributeActivation(0)
+            _attributeActivation(0),
+            _defaultVAO(0)
              {}
     } _input;
 
@@ -298,6 +320,7 @@ protected:
             _model(),
             _view(),
             _projection(),
+            _viewport(0,0,1,1),
             _invalidModel(true),
             _invalidView(true),
             _invalidProj(false),
@@ -307,7 +330,7 @@ protected:
 
     // Uniform Stage
     void do_setUniformBuffer(Batch& batch, uint32 paramOffset);
-    void do_setUniformTexture(Batch& batch, uint32 paramOffset);
+    void do_setResourceTexture(Batch& batch, uint32 paramOffset);
     
     struct UniformStageState {
         
@@ -316,6 +339,7 @@ protected:
     // Pipeline Stage
     void do_setPipeline(Batch& batch, uint32 paramOffset);
     void do_setStateBlendFactor(Batch& batch, uint32 paramOffset);
+    void do_setStateScissorRect(Batch& batch, uint32 paramOffset);
     
     // Standard update pipeline check that the current Program and current State or good to go for a
     void updatePipeline();
@@ -359,13 +383,24 @@ protected:
 
     // Output stage
     void do_setFramebuffer(Batch& batch, uint32 paramOffset);
+    void do_clearFramebuffer(Batch& batch, uint32 paramOffset);
+    void do_blit(Batch& batch, uint32 paramOffset);
 
+    // Synchronize the state cache of this Backend with the actual real state of the GL Context
+    void syncOutputStateCache();
+    
     struct OutputStageState {
 
         FramebufferPointer _framebuffer = nullptr;
-
+        GLuint _drawFBO = 0;
+        
         OutputStageState() {}
     } _output;
+
+    // Query section
+    void do_beginQuery(Batch& batch, uint32 paramOffset);
+    void do_endQuery(Batch& batch, uint32 paramOffset);
+    void do_getQuery(Batch& batch, uint32 paramOffset);
 
     // TODO: As long as we have gl calls explicitely issued from interface
     // code, we need to be able to record and batch these calls. THe long 
@@ -409,7 +444,6 @@ protected:
 
     typedef void (GLBackend::*CommandCall)(Batch&, uint32);
     static CommandCall _commandCalls[Batch::NUM_COMMANDS];
-
 };
 
 

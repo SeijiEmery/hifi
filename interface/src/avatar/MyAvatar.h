@@ -45,10 +45,9 @@ public:
     void preRender(RenderArgs* renderArgs);
     void updateFromTrackers(float deltaTime);
 
-    virtual void render(RenderArgs* renderArgs, const glm::vec3& cameraPosition, bool postLighting = false) override;
-    virtual void renderBody(RenderArgs* renderArgs, ViewFrustum* renderFrustum, bool postLighting, float glowLevel = 0.0f) override;
+    virtual void render(RenderArgs* renderArgs, const glm::vec3& cameraPositio) override;
+    virtual void renderBody(RenderArgs* renderArgs, ViewFrustum* renderFrustum, float glowLevel = 0.0f) override;
     virtual bool shouldRenderHead(const RenderArgs* renderArgs) const override;
-    void renderDebugBodyPoints();
 
     // setters
     void setLeanScale(float scale) { _leanScale = scale; }
@@ -102,7 +101,7 @@ public:
     
     eyeContactTarget getEyeContactTarget();
 
-    virtual int parseDataAtOffset(const QByteArray& packet, int offset);
+    virtual int parseDataFromBuffer(const QByteArray& buffer);
     
     static void sendKillAvatar();
     
@@ -195,10 +194,12 @@ public slots:
     void setThrust(glm::vec3 newThrust) { _thrust = newThrust; }
 
     void updateMotionBehavior();
-    
+
     glm::vec3 getLeftPalmPosition();
+    glm::quat getLeftPalmRotation();
     glm::vec3 getRightPalmPosition();
-    
+    glm::quat getRightPalmRotation();
+
     void clearReferential();
     bool setModelReferential(const QUuid& id);
     bool setJointReferential(const QUuid& id, int jointIndex);
