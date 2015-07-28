@@ -33,15 +33,18 @@ class JsdocGenerator(object):
 			'QVector': 'Array',
 			'QString': 'string',
 			'QStringList': 'string[]',
+			'QVariant': 'object',
+			'QVariantList': 'Array',
+			'QVariantMap': 'object',
 			'int':   'number',
 			'unsigned int': 'number',
 			'float': 'number',
 			'bool': 'bool',
 			'std::string': 'string',
 			'std::vector': 'Array',
-			'glm::vec3': 'glm.vec3',
-			'glm::quat': 'glm.quat',
-			'glm::vec2': 'glm.vec2',
+			'glm::vec3': 'object',
+			'glm::quat': 'object',
+			'glm::vec2': 'object',
 			'QObject *': 'object',
 			'void': 'undefined'
 		})
@@ -58,7 +61,7 @@ class JsdocGenerator(object):
 			return '/** %s %s*/'%('\n * '.join(lines), '\n' if len(lines) > 1 else '')
 
 		def fmtDescription(s, col_limit=100):
-			s = s.replace('<para>', '').replace('</para>', '')
+			s = s.replace('<para>', '<p>').replace('</para>', '</p>')
 			return textwrap.wrap(s, col_limit, break_long_words=False, replace_whitespace=False)
 
 		def getDescriptionLines(thing):
@@ -73,47 +76,49 @@ class JsdocGenerator(object):
 		def sanitizeName(name):
 			return name.replace('function', 'func')
 
+		jstypes = set()
+
+		def fmtType(type_):
+			jstype = self.toJsType(type_)
+			jstypes.add('{%s}'%jstype)
+			return '{%s} '%jstype# if jstype != 'object' else ''
 
 		def genClass(cls):
-			lines = ['', '@namespace'] + list(getDescriptionLines(cls))
+			lines = [ '' ]
+			lines += [ cls['name'].split('::')[-1] ]
+			lines += [ '@namespace ']
+			if len(cls['name'].split('::')) > 1:
+				lines += [ '@memberof %s'%('.'.join(cls['name'].split('::')[:-1])) ]
+			lines += list(getDescriptionLines(cls))
 			# lines += ['%s:%s'%(cls['file'], cls['line'])]
-			s = ''
-
 			if cls['scriptable']:
 				for prop in cls['scriptable']['properties']:
-					lines += ['@property {%s} %s'%(self.toJsType(prop['type']), sanitizeName(prop['name']))]
-			s += makeDocstring(lines) + '\n'
-			s += class_stub_template.format(
-				decl= 'var',
-				name= sanitizeName(cls['name'])
-			) + '\n'
+					lines += ['@property %s%s'%(fmtType(prop['type']), sanitizeName(prop['name'].split('::')[-1]))]
+			s = makeDocstring(lines) + '\n'
+			s += 'var %s;'%(cls['name'].split('::')[-1])
 
 			if cls['scriptable']:
 				for method in cls['scriptable']['methods']:
 					s += '\n'
-					lines = [
-						'',
-						'%s %s.%s'%(method['kind'], cls['name'], method['name'])
+					lines = [ '' ]
+					lines += list(getDescriptionLines(method))
+					if method['kind'] in ('signal', 'slot'):
+						lines += [ '@%s'%method['kind'] ]
+					lines += [
+						'@function %s'%method['name'].split('::')[-1], 
+						'@memberof %s'%cls['name'].replace('::', '.'),
 					]
 					lines += list(getDescriptionLines(method))
-					lines += [
-						'@function %s'%method['name'], 
-						'@memberof %s'%cls['name'],
-						'@static'
-					]
-
 					for p in method['params']:
-						lines += ['@param {%s} %s'%(self.toJsType(p['type']), sanitizeName(p['name']))]
-					if method['type']:
-						lines += ['@return {%s}'%(self.toJsType(method['type']))]
-					lines += [
-						'',
-						'%s:%s'%(method['file'], method['line'])
-					] 
+						lines += ['@param %s%s'%(fmtType(p['type']), sanitizeName(p['name']))]
+					if self.toJsType(method['type']) != 'undefined':
+						lines += ['@returns {%s}'%(self.toJsType(method['type']))]
+						jstypes.add('{%s}'%self.toJsType(method['type']))
 					s += makeDocstring(lines) + '\n'
 			return s
 
 		def genNonScriptable(item):
+			return ''
 			name = sanitizeName(item['name']).replace('::', '.')
 			s = ''
 			if '.' in name:
@@ -150,6 +155,10 @@ class JsdocGenerator(object):
 			else:
 				s += genNonScriptable(item)
 		print(s)
+
+		print("js types:\n\t" + '\n\t'.join(jstypes))
+
+
 		return s
 
 	def generateMethodStub(self, objdecl, method, rval):

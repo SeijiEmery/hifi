@@ -77,6 +77,13 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 		'void': 'undefined'
 	})
 
+	def fmt_name(cppname, jsname):
+		if print_cpp_type and print_js_type and jsname:
+			return '%s exposed as %s'%(cppname, jsname)
+		if print_js_type and not print_cpp_type and jsname:
+			return jsname
+		return cppname
+
 	def dump_property(prop):	
 		print("\t%s %s"%(prop['kind'], prop['name'].split('::')[-1]))
 		if print_cpp_type:
@@ -126,7 +133,7 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 		print("")
 	
 	def dump_class(cls, jsname):
-		print("class %s %s"%(cls['name'], 'exposed as %s'%jsname if jsname else ''))
+		print("class %s"%(fmt_name(cls['name'], jsname))
 		if cls['description']['brief']:
 			print("\tbrief: %s"%(cls['description']['brief']))
 		if cls['description']['details']:
@@ -144,7 +151,7 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 		print("")
 
 	def dump_enum(enum, jsname):
-		print("enum %s %s"%(enum['name'], 'exposed as %s'%jsname if jsname else ''))
+		print("enum %s"%fmt_name(enum['name'], jsname))
 		if enum['description']['brief']:
 			print("\tbrief: %s"%(enum['description']['brief']))
 		if enum['description']['details']:
@@ -182,7 +189,7 @@ if __name__ == '__main__':
 	out_file = 'tools/docgen/api.txt'
 	sys.stdout = open(out_file, 'w')
 
-	dump_scriptable_info(rs, script_api, scanner, print_cpp_type=True)
+	dump_scriptable_info(rs, script_api, scanner, print_cpp_type=False)
 	
 	sys.stdout.close()
 	sys.stdout = out_

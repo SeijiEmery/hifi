@@ -1246,9 +1246,7 @@ def convertType(knowntypes, builtintypes):
 			return '.'.join(filterNotEmpty(map(toJsType, cpptype.split('::'))))
 		if cpptype in knowntypes:
 			return cpptype
-		# print("UNKNOWN TYPE: %s"%(cpptype))
 		return cpptype
-		# return "??%s"%(cpptype)
 	return toJsType
 
 def autobuild ():
