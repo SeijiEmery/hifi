@@ -50,8 +50,10 @@ class JsdocGenerator(object):
 			'void': 'undefined'
 		})
 
-	def generate(self, scanner, entrypoints):
-		scanOutput = scanner.runScriptTrace(entrypoints.keys())
+	def generate(self, scanner, typenames):
+		scanOutput = scanner.runScriptTrace(typenames.keys())
+		# typenames = dict((v, k) for k, v in typenames.iteritems())
+
 		items = scanOutput['items']
 
 		print("")
@@ -87,29 +89,39 @@ class JsdocGenerator(object):
 			return '{%s} '%jstype# if jstype != 'object' else ''
 
 		def genClass(cls):
+			if cls['name'] in typenames:
+				clsname = typenames[cls['name']]
+			elif cls['name'].split('::')[-1] in typenames:
+				clsname = typenames[cls['name'].split('::')[-1]]
+			else:
+				clsname = cls['name'].replace('::', '.')
+				print("%s not in %s"%(cls['name'], typenames.keys()))
 			lines = [ '' ]
 			# lines += [ cls['name'].split('::')[-1] ]
 			lines += [ '@namespace ']
-			if len(cls['name'].split('::')) > 1:
-				lines += [ '@memberof %s'%('.'.join(cls['name'].split('::')[:-1])) ]
+			if '.' in clsname:
+				lines += [ '@memberof %s'%('.'.join(clsname.split('.')[:-1]))]
+			# if len(cls['name'].split('::')) > 1:
+				# lines += [ '@memberof %s'%('.'.join(cls['name'].split('::')[:-1])) ]
 			lines += list(getDescriptionLines(cls))
 			# lines += ['%s:%s'%(cls['file'], cls['line'])]
 			if cls['scriptable']:
 				for prop in cls['scriptable']['properties']:
 					lines += ['@property %s%s'%(fmtType(prop['type']), sanitizeName(prop['name'].split('::')[-1]))]
 			s = makeDocstring(lines) + '\n'
-			s += 'var %s;'%(cls['name'].split('::')[-1])
+			s += 'var %s;'%(clsname.split('::')[-1])
 
 			if cls['scriptable']:
 				for method in cls['scriptable']['methods']:
+					methodname = method['name'].split('::')[-1]
 					s += '\n'
 					lines = [ '' ]
 					lines += list(getDescriptionLines(method))
 					if method['kind'] in ('signal', 'slot'):
 						lines += [ '@%s'%method['kind'] ]
 					lines += [
-						'@function %s'%method['name'].split('::')[-1], 
-						'@memberof %s'%cls['name'].replace('::', '.'),
+						'@function %s'%methodname, 
+						'@memberof %s'%clsname,
 					]
 					for p in method['params']:
 						lines += ['@param %s%s'%(fmtType(p['type']), sanitizeName(p['name']))]
@@ -117,7 +129,7 @@ class JsdocGenerator(object):
 						lines += ['@returns {%s}'%(self.toJsType(method['type']))]
 						jstypes.add('{%s}'%self.toJsType(method['type']))
 					s += makeDocstring(lines) + '\n'
-					s += '%s = function(%s){};'%(method['name'].replace('::', '.'),
+					s += '%s.%s = function(%s){};'%(clsname, methodname,
 						', '.join([p['name'].replace('function', '_function') for p in method['params']]))
 			return s
 
