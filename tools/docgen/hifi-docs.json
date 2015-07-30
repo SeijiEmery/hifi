@@ -51,13 +51,10 @@
 	"referneced_type_blacklist": [
 	],
 	"warn_unused_type_blacklist": true,
-	"additional_interfaces": [
-		{
-			"name": "print",
-			"kind": "global-function"
-		},
+	"custom_interfaces": [
 		{
 			"name": "WebWindow",
+			"cppname": "WebWindow",
 			"docpage": "webwindow-functions",
 			"kind": "global-object",
 			"methods": [],
@@ -65,16 +62,19 @@
 		},
 		{
 			"name": "AudioEffectOptions",
+			"cppname": "AudioEffectOptions",
 			"docpage": "audio-effect-options",
 			"kind": "global-object"
 		},
 		{
 			"name": "SpeechRecognizer",
+			"cppname": "SpeechRecognizer",
 			"docpage": "speechrecognizer-functions",
 			"kind": "global-object"
 		},
 		{
 			"name": "XMLHttpRequest",
+			"cppname": "XMLHttpRequest",
 			"docpage": "xmlhttprequest",
 			"kind": "global-object"
 		},
@@ -142,6 +142,7 @@
 		"Conroller": []
 	},
 	"types": {
+		"void": "undefined",
 		"QObject": "object",
 		"QVector": "Array",
 		"QString": "string",
@@ -152,6 +153,7 @@
 		"QScriptValue": "QScriptValue",
 		"int": "number",
 		"unsigned int": "number",
+		"float": "number",
 		"bool": "bool",
 		"std::string": "string",
 		"std::vector": "Array",
@@ -163,9 +165,26 @@
 			"name": "quat",
 			"link": "quaternion-functions"
 		},
+		"glm::vec2": {
+			"name": "vec2",
+			"link": "vec2-functions"
+		},
+		"QSizeF": "vec2",
+		"Overlay": {
+			"name": "Overlay",
+			"link": "overlay-properties"
+		},
 		"QUuid": {
 			"name": "EntityItemID",
 			"link": "entity-properties#id"
+		},
+		"EntityItemProperties": {
+			"name": "EntityItemProperties",
+			"link": "entity-properties"
+		},
+		"MenuItemProperties": {
+			"name": "MenuItemProperties",
+			"link": "menu-properties"
 		}
 	},
 	"api_list": {
@@ -206,6 +225,6 @@
 		"Int32Array": [],
 		"Uint32Array": [],
 		"Float32Array": [],
-		"Float64Array": [],
-	},
+		"Float64Array": []
+	}
 }
