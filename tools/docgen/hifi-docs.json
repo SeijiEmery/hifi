@@ -140,5 +140,72 @@
 	"prefered_member_ordering": {
 		"Script": [],
 		"Conroller": []
-	}
+	},
+	"types": {
+		"QObject": "object",
+		"QVector": "Array",
+		"QString": "string",
+		"QStringList": "string[]",
+		"QVariant": "QVariant",
+		"QVariantList": "QVariant[]",
+		"QVariantMap": "object",
+		"QScriptValue": "QScriptValue",
+		"int": "number",
+		"unsigned int": "number",
+		"bool": "bool",
+		"std::string": "string",
+		"std::vector": "Array",
+		"glm::vec3": {
+			"name": "vec3",
+			"link": "vec3-functions"
+		},
+		"glm::quat": {
+			"name": "quat",
+			"link": "quaternion-functions"
+		},
+		"QUuid": {
+			"name": "EntityItemID",
+			"link": "entity-properties#id"
+		}
+	},
+	"api_list": {
+		"Script": [],
+		"Controller": [], 
+		"Entities": [],
+		"MyAvatar": [],
+		"AvatarList": [],
+		"AvatarManager": [],
+		"Camera": [],
+		"Overlays": [],
+		"Window": [],
+		"HMD": [],
+		"Scene": [],
+		"Audio": [],
+		"AudioDevice": [],
+		"Clipboard": [],
+		"Menu": [],
+		"Settings": [],
+		"Account": [],
+		"GlobalServices": [],
+		"UndoStack": [],
+		"AnimationCache": [],
+		"SoundCache": [],
+		"LODManager": [],
+		"Paths": [],
+		"ScriptDiscoveryService": [],
+		"Quat": [],
+		"Vec3": [],
+		"Vec2": [],
+		"ArrayBuffer": [],
+		"DataView": [],
+		"Int8Array": [],
+		"Uint8Array": [],
+		"Uint8ClampedArray": [],
+		"Int16Array": [],
+		"Uint16Array": [],
+		"Int32Array": [],
+		"Uint32Array": [],
+		"Float32Array": [],
+		"Float64Array": [],
+	},
 }

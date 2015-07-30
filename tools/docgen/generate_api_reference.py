@@ -1,6 +1,25 @@
 import os
+import sys
 from scanner import DoxygenScanner, autobuild, convertType, script_api
 import json
+
+
+class PrintToFile(object):
+	def __init__(self, filepath, writemode='w', duplicate_to_stdout=False):
+		self._stdout = sys.stdout
+		self._filepath = filepath
+		self.duplicate_to_stdout = duplicate_to_stdout
+		self.writemode = writemode
+	def __enter__(self):
+		self._out = open(self._filepath, self.writemode)
+		sys.stdout = self._out
+	def __exit__(self, type, value, traceback):
+		self._out.close()
+		sys.stdout = self._stdout
+		if self.duplicate_to_stdout:
+			with open(self._filepath, 'r') as f:
+				print(f.read())
+
 
 def loadApi(config_file, scanner):
 	with open(config_file, 'r') as f:
@@ -47,7 +66,9 @@ def loadApi(config_file, scanner):
 		raise e
 
 	interface_cpp = { x['cppname']: x for x in interfaces.itervalues() }
-	scan_results = scanner.runScriptTrace(interface_cpp.keys())
+
+	with PrintToFile('lastrun.log', 'a+', True):
+		scan_results = scanner.runScriptTrace(interface_cpp.keys())
 
 	def restricted_dict(d, ks):
 		return { k: v for k, v in d.iteritems() if k in ks }
@@ -106,7 +127,7 @@ def loadApi(config_file, scanner):
 	if non_loaded:
 		print("WARNING: The following class interfaces were not found:\n\t%s"%', '.join(non_loaded))
 		interfaces = { k: v for k, v in interfaces.iteritems() if v['loaded'] }
-
+ 
 	toJsType = convertType(knowntypes={}, builtintypes={
 		'QObject': 'object',
 	    'QVector': 'Array',
@@ -136,39 +157,100 @@ def loadApi(config_file, scanner):
 		'docpage': 'entity-properties'
 	}
 
-
 	def fmtType(t):
 		t = toJsType(t)
 		if t in typelist:
 			return '[%s](doc:%s)'%(t, typelist[t]['docpage'])
 		return t
 
+	print("")
+	print("Generating api-reference.txt")
+	with PrintToFile("tools/docgen/generated/api-reference.txt", duplicate_to_stdout=False):
+		for cls in interfaces.itervalues():
+			print("")
+			print("# %s"%cls['name'])
+			for method in cls['methods']:
+				print("%s [**%s**](%s) (%s)%s"%(
+					'function' if not method['isSignal'] else 'signal',
+					'%s.%s'%(cls['name'], method['name']),
+					'doc:%s#%s'%(cls['docpage'], method['name']),
+					', '.join([
+							'%s %s'%(fmtType(p['type']), p['name'])
+							for p in method['params']
+						]),
+					' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else ''
+					))
+			for prop in cls['properties']:
+				print("property [**%s**](%s): %s"%(
+					'%s.%s'%(cls['name'], prop['name']),
+					'doc:%s#%s'%(cls['docpage'], prop['name']),
+					fmtType(prop['type'])
+				))
 	for cls in interfaces.itervalues():
-		print("")
-		print("# %s"%cls['name'])
-		for method in cls['methods']:
-			print("%s [**%s**](%s)(%s)%s"%(
-				'function' if not method['isSignal'] else 'signal',
-				'%s.%s'%(cls['name'], method['name']),
-				'doc:%s#%s'%(cls['docpage'], method['name']),
-				', '.join([
+		print("Generating stub: %s.txt"%(cls['docpage']))
+		with PrintToFile("tools/docgen/generated/%s.txt"%(cls['docpage'])):
+			methods = [ method for method in cls['methods'] if not method['isSignal'] ]
+			signals = [ method for method in cls['methods'] if method['isSignal'] ]
+
+			''' Print page header / summary '''
+			if methods:
+				print("### Functions:")
+				for method in methods:
+					print("function [**%s**](%s) (%s)%s"%(
+						'%s.%s'%(cls['name'], method['name']),
+						'#%s'%(method['name']),
+						', '.join([
+							'%s %s'%(fmtType(p['type']), p['name'])
+							for p in method['params']
+						]),
+						' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else ''
+					))
+			if signals:
+				print("### Signals:")
+				for method in methods:
+					print("signal [**%s**](%s) (%s)%s"%(
+						'%s.%s'%(cls['name'], method['name']),
+						'#%s'%(method['name']),
+						', '.join([
+							'%s %s'%(fmtType(p['type']), p['name'])
+							for p in method['params']
+						]),
+						' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else ''
+					))
+			if cls['properties']:
+				print("### Properties:")
+				for prop in cls['properties']:
+					print("[**%s**](%s): %s"%(
+						'%s.%s'%(cls['name'], prop['name']),
+						'doc:%s#%s'%(cls['docpage'], prop['name']),
+						fmtType(prop['type'])
+					))
+
+			''' Print page contents (stubs) '''
+			print("")
+			for method in cls['methods']:
+				print("# <a id='{0}'>{0}</a>({1}){2}".format(
+					method['name'],
+					', '.join([
 						'%s %s'%(fmtType(p['type']), p['name'])
 						for p in method['params']
 					]),
-				' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else ''
+					' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else ''
 				))
-		for prop in cls['properties']:
-			print("property [**%s**](%s): %s"%(
-				'%s.%s'%(cls['name'], prop['name']),
-				'doc:%s#%s'%(cls['docpage'], prop['name']),
-				fmtType(prop['type'])
-			))
+				if method['descr']:
+					if method['descr']['brief']:
+						print(method['descr']['brief'])
+					if method['descr']['details']:
+						print(method['descr']['details'])
+				print("STUB")
+				print("")
 
 
 if __name__ == '__main__':
     os.chdir('../../')  # Navigate to root hifi directory
     autobuild()
 
-    scanner = DoxygenScanner('docs/xml')
-    scanner.loadIndex()
+    with PrintToFile('lastrun.log'):
+    	scanner = DoxygenScanner('docs/xml')
+    	scanner.loadIndex()
     loadApi('tools/docgen/hifi-docs.json', scanner)
