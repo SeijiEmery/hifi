@@ -1,0 +1,144 @@
+{
+	"interfaces": [
+		[ "Script", "ScriptEngine", "script-functions" ],
+		[ "Controller", "ControllerScriptingInterface", "controller-functions" ],
+		[ "Entities", "EntityScriptingInterface", "entity-functions" ],
+		[ "MyAvatar", "MyAvatar", "avatar-functions" ],
+		[ "AvatarList", "AvatarHashMap", "avatar-list-functions" ],
+		[ "AvatarManager", "AvatarManager", "avatar-manager-functions" ],
+		[ "Camera", "Camera", "camera-functions" ],
+		[ "Overlays", "Overlays", "overlay-functions" ],
+		[ "Window", "WindowScriptingInterface", "window-functions" ],
+		[ "HMD", "HMDScriptingInterface", "hmd-functions" ],
+		[ "Scene", "SceneScriptingInterface", "scene-functions" ],
+		[ "Audio", "AudioScriptingInterface", "audio-functions" ],
+		[ "AudioDevice", "AudioDeviceScriptingInterface", "audio-device-functions" ],
+		[ "Clipboard", "ClipboardScriptingInterface", "clipboard-functions" ],
+		[ "Menu", "MenuScriptingInterface", "menu-functions" ],
+		[ "Settings", "SettingsScriptingInterface", "settings-functions" ],
+		[ "Account", "AccountScriptingInterface", "account-functions" ],
+		[ "GlobalServices", "GlobalServicesScriptingInterface", "global-services-functions" ],
+		[ "UndoStack", "UndoStackScriptingInterface", "undostack-functions" ],
+		[ "AnimationCache", "AnimationCache", "animation-cache-functions" ],
+		[ "SoundCache", "SoundCache", "sound-cache-functions" ],
+		[ "LODManager", "LODManager", "lodmanager-functions" ],
+		[ "Paths", "PathUtils", "path-functions" ],
+		[ "ScriptDiscoveryService", "RunningScriptsWidget", "script-discovery-functions" ],
+		[ "Quat", "Quat", "quaternion-functions" ],
+		[ "Vec3", "Vec3", "vec3-functions" ],
+		[ "Vec2", "Vec2", "vec2-functions" ],
+		[ "ArrayBuffer", "ArrayBuffer", "ArrayBuffer-functions" ],
+		[ "DataView", "DataView", "DataView-functions" ],
+		[ "Int8Array", "Int8Array", "Int8Array-functions" ],
+		[ "Uint8Array", "Uint8Array", "Uint8Array-functions" ],
+		[ "Uint8ClampedArray", "Uint8ClampedArray", "Uint8ClampedArray-functions" ],
+		[ "Int16Array", "Int16Array", "Int16Array-functions" ],
+		[ "Uint16Array", "Uint16Array", "Uint16Array-functions" ],
+		[ "Int32Array", "Int32Array", "Int32Array-functions" ],
+		[ "Uint32Array", "Uint32Array", "Uint32Array-functions" ],
+		[ "Float32Array", "Float32Array", "Float32Array-functions" ],
+		[ "Float64Array", "Float64Array", "Float64Array-functions" ]
+	],
+	"interface_blacklist": [
+		"Glados.hasCake",
+		"Some.other.wierd.example"
+	],
+	"warn_unused_interface_blacklist": true,
+	"referenced_type_whitelist": [
+		{ "cpp_name": "ArrayBuffer", "name": "ArrayBuffer" }
+	],
+	"use_non_whitelisted_types": false,
+	"referneced_type_blacklist": [
+	],
+	"warn_unused_type_blacklist": true,
+	"additional_interfaces": [
+		{
+			"name": "print",
+			"kind": "global-function"
+		},
+		{
+			"name": "WebWindow",
+			"docpage": "webwindow-functions",
+			"kind": "global-object",
+			"methods": [],
+			"properties": []
+		},
+		{
+			"name": "AudioEffectOptions",
+			"docpage": "audio-effect-options",
+			"kind": "global-object"
+		},
+		{
+			"name": "SpeechRecognizer",
+			"docpage": "speechrecognizer-functions",
+			"kind": "global-object"
+		},
+		{
+			"name": "XMLHttpRequest",
+			"docpage": "xmlhttprequest",
+			"kind": "global-object"
+		},
+		{
+			"name": "getHudLookAtPosition2D",
+			"docpage": "hmd-functions#getHUDLookAtPosition2D",
+			"kind": "global-function"
+		},
+		{
+			"name": "getHudLookAtPosition3D",
+			"docpage": "hmd-functions#getHUDLookAtPosition3D",
+			"kind": "global-function"
+		},
+		{
+			"name": "location",
+			"docpage": "location",
+			"kind": "global-property"
+		},
+		{
+			"name": "version",
+			"kind": "global-property"
+		},
+		{
+			"name": "Foo",
+			"docpage": "foo-functions",
+			"methods": [
+				{
+					"name": "fooSignalled",
+					"isSignal": true,
+					"params": [
+						{ "name": "foo", "type": "FooType" },
+						{ "name": "bar", "type": "number" },
+						{ "name": "baz", "type": "string" }
+					],
+					"return": "bool",
+					"defn_file": "docs/internal/Foo_fooSignaled.md"
+				},
+				{
+					"name": "signalFoo",
+					"isSignal": false,
+					"params": [
+						{ "name": "foo", "type": "FooType" }
+					],
+					"return": "",
+					"defn_file": "docs/internal/Foo_signalFoo.md"
+				}
+			],
+			"properties": [
+				{
+					"name": "isFooable",
+					"type": "bool",
+					"defn_file": "docs/internal/Foo_isFooable"
+				},
+				{
+					"name": "hasBar",
+					"type": "bool",
+					"defn": "has bar and baz is not spazzable"
+				}
+			]
+		}
+	],
+	"prefered_api_list_ordering": [],
+	"prefered_member_ordering": {
+		"Script": [],
+		"Conroller": []
+	}
+}

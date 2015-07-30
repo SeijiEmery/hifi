@@ -87,7 +87,7 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 	def dump_property(prop):	
 		print("\t%s %s"%(prop['kind'], prop['name'].split('::')[-1]))
 		if print_cpp_type:
-			print("\tcpp type: %s"%(prop['type']))
+			print("\tcpp type: %s"%(prop['type'].replace('Q_INVOKABLE')))
 		if print_js_type:
 			print("\tjs type: {%s}"%(toJsType(prop['type'])))
 		if prop['read']:
@@ -133,7 +133,7 @@ def dump_scriptable_info(scan_output, api, scanner, print_cpp_type=True, print_j
 		print("")
 	
 	def dump_class(cls, jsname):
-		print("class %s"%(fmt_name(cls['name'], jsname))
+		print("class %s"%(fmt_name(cls['name'], jsname)))
 		if cls['description']['brief']:
 			print("\tbrief: %s"%(cls['description']['brief']))
 		if cls['description']['details']:
@@ -189,7 +189,7 @@ if __name__ == '__main__':
 	out_file = 'tools/docgen/api.txt'
 	sys.stdout = open(out_file, 'w')
 
-	dump_scriptable_info(rs, script_api, scanner, print_cpp_type=False)
+	dump_scriptable_info(rs, script_api, scanner, print_cpp_type=True)
 	
 	sys.stdout.close()
 	sys.stdout = out_
