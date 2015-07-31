@@ -1,15 +1,15 @@
 {
 	"interfaces": [
-		[ "Script", "ScriptEngine", "script-functions" ],
-		[ "Controller", "ControllerScriptingInterface", "controller-functions" ],
-		[ "Entities", "EntityScriptingInterface", "entity-functions" ],
-		[ "MyAvatar", "MyAvatar", "avatar-functions" ],
-		[ "AvatarList", "AvatarHashMap", "avatar-list-functions" ],
-		[ "AvatarManager", "AvatarManager", "avatar-manager-functions" ],
-		[ "Camera", "Camera", "camera-functions" ],
-		[ "Overlays", "Overlays", "overlay-functions" ],
-		[ "Window", "WindowScriptingInterface", "window-functions" ],
-		[ "HMD", "HMDScriptingInterface", "hmd-functions" ],
+		[ "Script", "ScriptEngine", "script-object" ],
+		[ "Controller", "ControllerScriptingInterface", "controller" ],
+		[ "Entities", "EntityScriptingInterface", "entities" ],
+		[ "MyAvatar", "MyAvatar", "myavatar" ],
+		[ "AvatarList", "AvatarHashMap", "avatar-list" ],
+		[ "AvatarManager", "AvatarManager", "avatar-manager" ],
+		[ "Camera", "Camera", "camera" ],
+		[ "Overlays", "Overlays", "overlays" ],
+		[ "Window", "WindowScriptingInterface", "window" ],
+		[ "HMD", "HMDScriptingInterface", "hmd" ],
 		[ "Scene", "SceneScriptingInterface", "scene-functions" ],
 		[ "Audio", "AudioScriptingInterface", "audio-functions" ],
 		[ "AudioDevice", "AudioDeviceScriptingInterface", "audio-device-functions" ],
@@ -151,9 +151,10 @@
 		"QVariantList": "QVariant[]",
 		"QVariantMap": "object",
 		"QScriptValue": "QScriptValue",
-		"int": "number",
-		"unsigned int": "number",
-		"float": "number",
+		"int": "int",
+		"unsigned int": "uint",
+		"float": "float",
+		"double": "float",
 		"bool": "bool",
 		"std::string": "string",
 		"std::vector": "Array",
@@ -188,12 +189,24 @@
 		}
 	},
 	"api_list": {
-		"Script": [],
-		"Controller": [], 
-		"Entities": [],
-		"MyAvatar": [],
-		"AvatarList": [],
-		"AvatarManager": [],
+		"Script": [
+		
+		],
+		"Controller": [
+
+		], 
+		"Entities": [
+
+		],
+		"MyAvatar": [
+
+		],
+		"AvatarList": [
+
+		],
+		"AvatarManager": [
+
+		],
 		"Camera": [],
 		"Overlays": [],
 		"Window": [],

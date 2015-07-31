@@ -100,6 +100,14 @@ def loadApi(config_file, scanner):
 		d = thing['description']
 		return d if d['brief'] or d['details'] or d['inbody'] else None
 
+	''' Load defined linkable types '''
+	types = {}
+	for k, v in config['types'].iteritems():
+		if type(v) in (str, unicode):
+			types[k] = { "name": v, "link": None }
+		else:
+			types[k] = { "name": v["name"], "link": v["link"] }
+
 	''' Pull out the info we need from scan_results '''
 	scanned_types = {}
 
@@ -149,10 +157,11 @@ def loadApi(config_file, scanner):
 				warnings += ["WARNING: Unhandled interface kind '%s': "%(item['kind'])]
 			parsed_scan_results.add(item['name'])
 
+		typenames = set([ t['name'] for t in types.itervalues() ])
 		unparsed_scan_results = { 
 			k: v 
 			for k, v in indexed_scan_results.iteritems() 
-			if k not in parsed_scan_results
+			if k not in parsed_scan_results and k not in typenames
 		}
 		if unparsed_scan_results:
 			warnings += [ 'WARNING: unused scanned items: %s'%(', '.join(unparsed_scan_results.keys()))]
@@ -166,19 +175,11 @@ def loadApi(config_file, scanner):
 		warnings += ["WARNING: The following class interfaces were not found:\n\t%s"%', '.join(non_loaded)]
 		interfaces = { k: v for k, v in interfaces.iteritems() if v['loaded'] }
 
-	types = {}
-	for k, v in config['types'].iteritems():
-		if type(v) in (str, unicode):
-			types[k] = { "name": v, "link": None }
-		else:
-			print(type(v))
-			types[k] = { "name": v["name"], "link": v["link"] }
-
+	
 	types.update({ x['cppname']: { 'name': x['name'], 'link': x['docpage'] } for x in interface_list })
 	toJsType = convertType({}, builtintypes = dict([ (k, v["name"]) for k, v in types.iteritems() ]))
  
 	linked_types = { x['name']: x['link'] for x in types.itervalues() }
-
 
 	unknown_types = set()
 	def fmtType(t):
@@ -230,7 +231,6 @@ def loadApi(config_file, scanner):
 			' => %s'%(fmtType(method['return'])) if fmtType(method['return']) != 'undefined' else '')
 
 	def fmtProperty_jsStyle(prop, name, link):
-		print(prop)
 		return '[**%s**](%s): %s'%(name, link, fmtType(prop['type']))
 	def fmtProperty_cStyle(prop, name, link=None):
 		return '%s [**%s**](%s)'%(link, fmtType(prop['type']), name)
@@ -259,7 +259,66 @@ def loadApi(config_file, scanner):
 	fmtMethod = fmtMethod_jsStyle
 	fmtProperty = fmtProperty_jsStyle
 	fmtMethodDefn = fmtMethodDefn_jsStyle
-	fmtPropertyDefn = fmtPropertyDefn_jsStyle
+	fmtPropertyDefn = fmtPropertyDefn_jsStyle\
+
+	def generateApiList():
+		api_list = set()
+		for cls in interface_list:
+			api_list.add(cls['name'])
+			for item in cls['methods']:
+				api_list.add('%s.%s'%(cls['name'], item['name']))
+			for item in cls['properties']:
+				api_list.add('%s.%s'%(cls['name'], item['name']))
+		return api_list
+
+	def getExposedApi():
+		exposed_list = set()
+		with open('tools/docgen/exposed_api.js') as f:
+			for line in f.readlines():
+				line = line.strip().split('//')[0].strip().split('(')[0].strip()
+				if line:
+					exposed_list.add(str(line))
+		return exposed_list
+
+	def printApiDiff():
+		api_list, exposed_list = generateApiList(), getExposedApi()
+		# print("Our api list:")
+		# for item in api_list:
+		# 	print("\t%s"%(item))
+		# print("Exposed api list:")
+		# for item in exposed_list:
+		# 	print("\t%s"%(item))
+		scannedButNotInJsList = [ item for item in api_list if not item in exposed_list ]
+		exposedButNotScannedList = [ item for item in exposed_list if not item in api_list ]
+		if scannedButNotInJsList:
+			print("WARNING: %d scanned items not in 'exposed_api.js':"%(len(scannedButNotInJsList)))
+			bycat = {}
+			for item in scannedButNotInJsList:
+				k, v = item.split('.')[0], item
+				if not k in bycat:
+					bycat[k] = [v]
+				else:
+					bycat[k].append(v)
+			for k, v in bycat.iteritems():
+				for item in v:
+					print("\t%s"%item)
+		if exposedButNotScannedList:
+			print("WARNING %d missing items (via 'exposed_api.js'):"%(len(exposedButNotScannedList)))
+			bycat = {}
+			for item in exposedButNotScannedList:
+				k, v = item.split('.')[0], item
+				if not k in bycat:
+					bycat[k] = [v]
+				else:
+					bycat[k].append(v)
+			for k, v in bycat.iteritems():
+				for item in v:
+					print("\t%s"%item)
+
+		# print("Shared items:")
+		# for item in [ item for item in api_list if item in exposed_list ]:
+		# 	print("\t%s"%(item))
+
 
 	print("")
 	print("Generating api-reference.txt")
@@ -308,7 +367,8 @@ def loadApi(config_file, scanner):
 			''' Print page contents (stubs) '''
 			print("")
 			for method in cls['methods']:
-				print("# %s"%(fmtMethodDefn(method)))
+				print("# %s %s"%('function' if not method['isSignal'] else 'signal',
+					fmtMethodDefn(method)))
 				# if method['descr']:
 				# 	if method['descr']['brief']:
 				# 		print(method['descr']['brief'])
@@ -320,7 +380,7 @@ def loadApi(config_file, scanner):
 	print('\n'.join(warnings))
 	print('')
 	printUnknownTypes()
-
+	printApiDiff()
 
 if __name__ == '__main__':
     os.chdir('../../')  # Navigate to root hifi directory
