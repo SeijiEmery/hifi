@@ -28,14 +28,14 @@ var module = {};
 var modules = {};
 module.add = function (name, body, test) {
     return modules[name] = { load: body, test: test };
-}
+};
 module.load = function (func) {
     try {
         func.call(this, _export);
     } catch (e) {
         UIWidgets.abortWithError(e);
     }
-}
+};
 UIWidgets.abortWithError = function (err) {
     modules.Overlays.load(this);
 
@@ -72,7 +72,7 @@ var Rect = _export.Rect = function (xmin, ymin, xmax, ymax) {
     this.y0 = ymin;
     this.x1 = xmax;
     this.y1 = ymax;
-}
+}.trace();
 Rect.prototype.grow = function (pt) {
     this.x0 = Math.min(this.x0, pt.x);
     this.y0 = Math.min(this.y0, pt.y);
@@ -119,15 +119,15 @@ var makeOverlay = _export.makeOverlay = function (type, properties) {
 }
 /// Wraps TextOverlay
 _export.makeTextOverlay = function (properties) {
-    if (properties && properties.backgroundColor.alpha !== undefined)
+    if (properties.backgroundColor && properties.backgroundColor.alpha !== undefined)
         properties.backgroundAlpha = properties.backgroundColor.alpha;
-    if (properties && properties.color.alpha !== undefined)
+    if (properties.color && properties.color.alpha !== undefined)
         properties.alpha = properties.color.alpha;
     return makeOverlay.call(this, 'text', properties);
 }
 /// Wraps ImageOverlay
 _export.makeImageOverlay = function (properties) {
-    if (properties && properties.color.alpha !== undefined)
+    if (properties.color && properties.color.alpha !== undefined)
         properties.alpha = properties.color.alpha;
     return makeOverlay.call(this, 'image', properties);
 }
@@ -179,6 +179,19 @@ module.add('UI', function (_exports) {
 var Rect = _exports.Rect;
 var makeTextOverlay = _exports.makeTextOverlay;
 var makeImageOverlay = _exports.makeImageOverlay;
+
+Function.prototype.wrapCall = function () {
+    var _this = this;
+    return function () {
+        return _this.call(this, arguments);
+    }
+}
+Function.prototype.wrapCall = function () {
+    return this;
+}
+
+
+
 
 /// UI namespace
 var UI = this.UI = {};
@@ -264,15 +277,12 @@ var Widget = function () {};
 // Shared methods:
 var __widgetId = 0;
 Widget.prototype.constructor = function (properties) {
-    properties = setDefaults.call(this, properties, {
+    properties = setDefaults(properties, {
         position: { x: 0.0, y: 0.0 },
         visible: ui.defaultVisible,
         actions: {}
     });
-
-    this.position = properties.position || { x: 0.0, y: 0.0 };
-    this.visible = properties.visible || ui.defaultVisible;
-    this.actions = properties.actions || {};
+    extractProperties(properties, ['position', 'visible', 'actions'], this);
 
     this.dimensions = null;
     this.parentVisible = null;
@@ -356,7 +366,7 @@ Widget.prototype.updateOverlays = function () {};
 var WidgetStack = UI.WidgetStack = function (properties) {
     Widget.prototype.constructor.call(this, properties);
 
-    properties = setDefaults.call(this, properties, {
+    properties = setDefaults(properties, {
         dir:     '+y',
         border:  { x: 0.0, y: 0.0 },
         padding: { x: 0.0, y: 0.0 },
@@ -377,7 +387,7 @@ var WidgetStack = UI.WidgetStack = function (properties) {
 
     var background = properties.background;
     if (background) {
-        setDefaults.call(this, background, {
+        setDefaults(background, {
             backgroundColor: COLOR_GRAY,
             textColor: COLOR_WHITE
         });
@@ -385,7 +395,7 @@ var WidgetStack = UI.WidgetStack = function (properties) {
         background.y = this.position.y;
         background.width = 1;
         background.height = 1;
-        background.visible = false;
+        background.visible = this.isVisible();
         this.backgroundOverlay = makeTextOverlay.call(this, background);
     } else {
         this.backgroundOverlay = null;
@@ -474,7 +484,7 @@ WidgetStack.prototype.updateOverlays = function () {
 /// GUI Textured Rect
 var Image = UI.Image = function (properties) {
     Widget.prototype.constructor.call(this, properties);
-    setDefaults.call(this, properties, {
+    setDefaults(properties, {
         width: 1.0, height: 1.0,
         color: COLOR_WHITE,
     });
@@ -541,7 +551,7 @@ Image.prototype.updateOverlays = function () {
 var Box = UI.Box = function (properties) {
     Widget.prototype.constructor.call(this, properties);
 
-    properties = setDefaults.call(this, properties, {
+    properties = setDefaults(properties, {
         width: 10,
         height: 10
     });
@@ -552,7 +562,7 @@ var Box = UI.Box = function (properties) {
     properties.y = this.position.y;
     properties.visible = this.isVisible();
 
-    this.overlay = makeTextOverlay.call(this, properties);
+    this.overlay = makeTextOverlay(properties);
 };
 Box.prototype = new Widget();
 Box.prototype.constructor = Box;
@@ -588,9 +598,10 @@ Box.prototype.updateOverlays = function () {
 }
 
 var Label = UI.Label = function (properties) {
-    properties = setDefaults.call(this, properties, {
+    properties = setDefaults(properties, {
         text: "", width: 220, height: 20,
-        color: COLOR_WHITE
+        backgroundAlpha: 0.0,
+        color: COLOR_WHITE,
     });
     Box.prototype.constructor.call(this, properties);
 };
@@ -612,20 +623,22 @@ Label.prototype.setText = function (text) {
 var Slider = UI.Slider = function (properties) {
     Box.prototype.constructor.call(this, properties);
 
-    properties = setDefaults.call(this, {
-        value: 0.0, maxValue: 1.0, minValue: -1.0,
-        padding: { x: 4, y: 4 },
+    properties = setDefaults(properties, {
+        value: 2.0, maxValue: 10.0, minValue: 0.0,
+        width: 120, height: 20, padding: { x: 4, y: 4 },
         onValueChanged: function () {},
         slider: {}
     });
     extractProperties(properties, ['value', 'maxValue', 'minValue', 'padding', 'onValueChanged'], this);
+    setDefaults(properties.slider, {
+        width: 40, height: 20
+    });
 
-    properties.slider.visible = false;
-    properties.slider.width  = Math.max(this.width  - this.padding.x, 0.0);
-    properties.slider.height = Math.max(this.height - this.padding.y, 0.0);
+    properties.slider.visible = this.visible;
+    properties.slider.width  = Math.min(this.width, properties.slider.width) - this.padding.x;
+    properties.slider.height = Math.min(this.height, properties.slider.height) - this.padding.y;
 
     this.slider = new Box(properties.slider);
-    this.slider.visible = true;
     this.slider.parent = this;
     this.applyLayout();
 
@@ -673,62 +686,65 @@ Slider.prototype.setValue = function (value) {
 var Checkbox = UI.Checkbox = function (properties) {
     Box.prototype.constructor.call(this, properties);
 
-    properties = setDefaults.call(this, properties, {
-        checked: true,
+    properties = setDefaults(properties, {
+        checked: false,
         square: true,
         padding: { x: 4, y: 4 },
         checkMark: {}
     });
 
-    setDefaults.call(this, properties.checkMark, {
+    setDefaults(properties.checkMark, {
         backgroundColor: rgba(77, 185, 77, 1.0),
     });
-    properties.checkMark.visible = this.checked;
+    properties.checkMark.visible = properties.checked;
     properties.checkMark.position = {
-        x: this.position.x + (this.width - this.checkMark.width) * 0.5,
-        y: this.position.y + (this.height - this.checkMark.height) * 0.5
+        x: this.position.x + (this.width - properties.checkMark.width) * 0.5,
+        y: this.position.y + (this.height - properties.checkMark.height) * 0.5
     };
     if (properties.square) { 
         // Constrain inner checkbox to be square (irrespective of outer dimensions)
-        var r = Math.min(this.width - this.padding.x * 2.0, this.height - this.padding.y * 2.0);
+        var r = Math.min(this.width - properties.padding.x * 2.0, this.height - properties.padding.y * 2.0);
         properties.checkMark.width = properties.checkMark.height = Math.max(r, 1.0);
     } else {
         // Inner checkbox can be rectangular
-        properties.checkMark.width = Math.max(this.width - this.padding.x * 2.0, 1.0);
-        properties.checkMark.height = Math.max(this.width - this.padding.y * 2.0, 1.0);
+        properties.checkMark.width = Math.max(this.width - properties.padding.x * 2.0, 1.0);
+        properties.checkMark.height = Math.max(this.width - properties.padding.y * 2.0, 1.0);
     }
     this.checkMark = new Box(properties.checkMark);
     this.checkMark.parent = this;
+    this.checked = properties.checked;
     this.onValueChanged = properties.onValueChanged;
+    this.padding = properties.padding;
 
-    this.addAction('onClick', function (event, widget) {
+    var widget = this;
+    this.addAction('onClick', function (event) {
         widget.setChecked(!widget.isChecked());
     });
-    this.checkMark.addAction('onClick', function (event, widget) {
+    this.checkMark.addAction('onClick', function (event) {
         widget.setChecked(!widget.isChecked());
     });
-};
+}.wrapCall();
 Checkbox.prototype = new Box();
 Checkbox.prototype.constructor = Checkbox;
 Checkbox.prototype.toString = function () {
     return "[UI.Checkbox " + this.id + "]";
-}
+}.wrapCall();
 Checkbox.prototype.isChecked = function () {
     return this.checked;
-}
+}.wrapCall();
 Checkbox.prototype.setChecked = function (value) {
     this.checked = value;
     this.checkMark.setVisible(this.checked);
 
     this.onValueChanged(value);
     UI.updateLayout();
-}
+}.wrapCall();
 Checkbox.prototype.applyLayout = function () {
     this.checkMark && this.checkMark.setPosition(
         this.position.x + (this.width - this.checkMark.width) * 0.5,
         this.position.y + (this.height - this.checkMark.height) * 0.5
     );
-}
+}.wrapCall();
 
 UI.addAttachment = function (target, rel, update) {
     attachment = {
@@ -738,7 +754,7 @@ UI.addAttachment = function (target, rel, update) {
     };
     ui.attachmentList.push(attachment);
     return attachment;
-}
+}.wrapCall();
 
 
 UI.updateLayout = function () {
@@ -800,11 +816,9 @@ UI.setDefaultVisibility = function(visibility) {
 };
 
 function dispatchEvent(actions, widget, event) {
-    var _TRACE = traceEnter.call(this, "UI.dispatchEvent()");
     actions.forEach(function(action) {
         action.call(widget, event);
     });
-    _TRACE.exit();
 }
 
 // Debugging ui
@@ -1092,6 +1106,8 @@ UI.printWidgets = function () {
 modules.Rect.load.call(this, _export);
 modules.Overlays.load.call(this, _export);
 modules.UI.load.call(this, _export);
+
+_export.UI.init.apply(_export);
 
 // Register events
 // Controller.mousePressEvent.connect(UI.handleMousePress);

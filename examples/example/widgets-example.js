@@ -8,16 +8,55 @@
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 print("including from widgets-example.js");
+
+Script.include('../libraries/trace.js');
+useTracebacks();
+print(traced);
+print(Function.prototype.traced);
+
+
 Script.include('../libraries/uiwidgets.js');
+
 print("loading from widgets-example.js");
 
+// print(''+useTracebacks);
+// print(''+UIWidgets);
 
-// (function () {
-//     UI.init.apply(this);
-// })();
+var module = {};
+module.catchExceptions = true;
+module.run = function () {
+    var lineLimit = 8;
+    var formatTracebackLine = function (f) {
+        return f.toString().split('\n').slice(0, lineLimit).join('\n   ');
+    }
 
+    function run () {
+        // Load dependencies
+        // useTracebacks.call(this);
+        UIWidgets.load.call(this, this);
 
-var runWidgetsExample = function (_imports) {
+        // Run this script
+        module.runLocal(this);
+    }
+
+    if (module.catchExceptions) {
+        try {
+            run.call(this, this);
+        } catch (e) {
+            // Catch errors with tracebacks enabled.
+            // put error message in an overlay that disappears when clicked.
+            var errorMsg = e.toString() + '\n   stacktrace:\n' + e.stack;
+            var errDialog = UIWidgets.abortWithError(errorMsg);
+    
+            // rethrow the error so it gets logged
+            throw e;
+        }
+    } else {
+        run.call(this, this);
+    }
+}
+
+module.runLocal = function (_imports) {
 
 var UI = _imports.UI;
 
@@ -77,14 +116,13 @@ function addPanel (properties) {
 }
 
 function makeDraggable (panel, target) {
-    if (!target)
-        target = panel;
+    target = target || panel;
 
     var dragStart = null;
     var initialPos = null;
 
     panel.addAction('onMouseDown', function (event) {
-        dragStart = { x: event.x, y: event.y };
+        dragStart  = { x: event.x, y: event.y };
         initialPos = { x: target.position.x, y: target.position.y };
     });
     panel.addAction('onDrag', function (event) {
@@ -269,7 +307,7 @@ slider.onValueChanged = function (value) {
 
 
 
-var checkBoxLayout = zoomPanel.add(new UI.WidgetStack({
+var checkBoxLayout = zoomPanel.add.call(zoomPanel, new UI.WidgetStack({
     dir: '+x', visible: true, backgroundAlpha: 0.0
 }));
 // var padding = checkBoxLayout.add(new UI.Label({
@@ -290,14 +328,11 @@ var checkbox = checkBoxLayout.add(new UI.Checkbox({
     backgroundAlpha: 0.9,
     checked: false,
     onValueChanged: function (red) {
-
-        this.doBar();
-
         zoomPanel.getOverlay().update({
-        // backgroundAlpha: 0.1,
-        backgroundColor: red ? redColor : defaultColor
-    });
-}
+            // backgroundAlpha: 0.1,
+            backgroundColor: red ? redColor : defaultColor
+        });
+    }
 }));
 
 addImage(zoomPanel, 'reverse');
@@ -370,108 +405,71 @@ function teardown() {
 };
 Script.scriptEnding.connect(teardown);
 
-
-};
-
+}; // module.runLocal
 
 
-
-(function () {
-    // Stacktrace (http://helephant.com/2007/05/12/diy-javascript-stack-trace/)
-    // Function.prototype.trace = function() {
-    //     var trace = [];
-    //     var current = this;
-    //     while(current) {
-    //         trace.push(current.signature());
-    //         current = current.caller;
-    //     }
-    //     return trace;
-    // }
-    // Function.prototype.signature = function() {
-    //     var signature = {
-    //         name: this.getName(),
-    //         params: [],
-    //         toString: function() {
-    //             var params = this.params.length > 0 ?
-    //                 "'" + this.params.join("', '") + "'" : "";
-    //             return this.name + "(" + params + ")"
-    //         }
-    //     };
-    //     if(this.arguments)
-    //     {
-    //         for(var x=0; x<this .arguments.length; x++)
-    //             signature.params.push(this.arguments[x]);
-    //     }
-    //     return signature;
-    // }
-    // Function.prototype.getName = function() {
-    //     if(this.name)
-    //         return this.name;
-    //     var definition = this.toString().split("\n")[0];
-    //     var exp = /^function ([^\s(]+).+/|>;
-    //     if(exp.test(definition))
-    //         return definition.split("\n")[0].replace(exp, "$1") || "anonymous";
-    //     return "anonymous";
-    // }
-
-    // Try loading the library + script
-    // Breaks cleanly on errors w/ a overlay displaying the stack trace.
-
-    var _call = Function.prototype.call;
-    var _apply = Function.prototype.apply;
-    var trace = [];
-    Function.prototype.call = function () {
-        try {
-            trace.push(this);
-            var rv = _call.apply(this, arguments);
-            trace.pop(this);
-            return rv;
-        } catch (e) {
-            throw e;
-        }
-    }
-
-    try {
-        UIWidgets.load.call(this);
-        runWidgetsExample.call(this);
-    } catch (e) {
-        var callstack = [];
-        var currentFunction = arguments.callee.caller;
-        while (currentFunction) {
-            var fn = currentFunction.toString();
-            var fname = fn.substring(fn.indexOf("function") + 8, fn.indexOf('')) || 'anonymous';
-            callstack.push(fname);
-            currentFunction = currentFunction.caller;
-        }
+module.run();
 
 
-        var brief = function (n) { 
-            return function (f) {
-                var lines = (''+f).split('\n');
-                return lines.length <= n ? lines.join('\n    ') : lines.slice(0, n).join('\n    ') + '\n...';
-            }
-        }
+// (function () {
+//     // Try loading the library + script
+//     // Breaks cleanly on errors w/ a overlay displaying the stack trace.
+
+//     var _call = Function.prototype.call;
+//     var _apply = Function.prototype.apply;
+//     var trace = [];
+//     Function.prototype.call = function () {
+//         try {
+//             trace.push(this);
+//             var rv = _call.apply(this, arguments);
+//             trace.pop(this);
+//             return rv;
+//         } catch (e) {
+//             throw e;
+//         }
+//     }
+
+//     try {
+//         UIWidgets.load.call(this, this);
+//         runWidgetsExample.call(this, this);
+//     } catch (e) {
+//         var callstack = [];
+//         var currentFunction = arguments.callee.caller;
+//         while (currentFunction) {
+//             var fn = currentFunction.toString();
+//             var fname = fn.substring(fn.indexOf("function") + 8, fn.indexOf('')) || 'anonymous';
+//             callstack.push(fname);
+//             currentFunction = currentFunction.caller;
+//         }
+
+
+//         var brief = function (n) { 
+//             return function (f) {
+//                 var lines = (''+f).split('\n');
+//                 return lines.length <= n ? lines.join('\n    ') : lines.slice(0, n).join('\n    ') + '\n...';
+//             }
+//         }
 
 
 
 
-        var errorMsg = e + '\n    stack trace: (' + trace.length + ')\n' + trace.reverse().map(brief(8)).join('\n');
-        // +
-            // '    caller: ' + UIWidgets.load.caller + "\n" + 
-            // '    Error.stack: ' + e.stack + '\n' + 
-            // '    manual callstack: ' + (callstack.join('\n') || null) + '\n' +
-            // Object.keys(e).map(function (k) { "'" + k + "': " + e[k]; }).join('\n');
+//         var errorMsg = e + '\n    stack trace: (' + trace.length + ')\n' + trace.reverse().map(brief(12)).join('\n');
+//         // +
+//             // '    caller: ' + UIWidgets.load.caller + "\n" + 
+//             // '    Error.stack: ' + e.stack + '\n' + 
+//             // '    manual callstack: ' + (callstack.join('\n') || null) + '\n' +
+//             // Object.keys(e).map(function (k) { "'" + k + "': " + e[k]; }).join('\n');
 
-        var errDialog = UIWidgets.abortWithError(errorMsg);
+//         var errDialog = UIWidgets.abortWithError(errorMsg);
 
-        Script.errorMessage.connect(function (msg) {
-            errorMessage += '\nnew line: \n' + msg;
-            errDialog.update({ text: errorMessage });
-        });
-        throw e;
-    }
-    Function.prototype.call = _call;
-})();
+//         Script.errorMessage.connect(function (msg) {
+//             errorMessage += '\nnew line: \n' + msg;
+//             errDialog.update({ text: errorMessage });
+//         });
+//         throw e;
+//     }
+//     Function.prototype.call = _call;
+// })();
 
 
 
