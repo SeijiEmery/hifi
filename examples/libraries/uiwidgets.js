@@ -9,9 +9,65 @@
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 
-(function() {
+(function(){
+// Module wrapper
+var UIWidgets = this.UIWidgets = {};
+print("running in uiwidgets.js");
+UIWidgets.load = function (_export) {
 
-var Rect = function (xmin, ymin, xmax, ymax) {
+print("loading in uiwidgets.js");
+_export = _export || this;
+
+// Externals
+// var _Script     = _export.Script;
+// var _Controller = _export.Controller;
+
+// Internal module system for incremental library loading.
+// Catches bugs.
+var module = {};
+var modules = {};
+module.add = function (name, body, test) {
+    return modules[name] = { load: body, test: test };
+}
+module.load = function (func) {
+    try {
+        func.call(this, _export);
+    } catch (e) {
+        UIWidgets.abortWithError(e);
+    }
+}
+UIWidgets.abortWithError = function (err) {
+    modules.Overlays.load(this);
+
+    var viewDimensions = Controller.getViewportDimensions();
+    var width  = viewDimensions.x * 0.75;
+    var height = viewDimensions.y * 0.75;
+
+    // UI.teardown();
+    message = "Script running uiwidgets.js crashed with error:\n" + err;
+    var errorDialog = this.makeTextOverlay.call(this, {
+        text: message, width: width, height: height,
+        backgroundAlpha: 0.5,
+        backgroundColor: { red: 10, green: 10, blue: 10 },
+        color: { red: 225, green: 10, blue: 10 },
+        alpha: 0.9,
+        visible: true,
+        x: 100,
+        y: 100
+    });
+    Controller.mousePressEvent.connect(function (event) {
+        if (Overlays.getOverlayAtPoint({ x: event.x, y: event.y }) == errorDialog.getId()) {
+            errorDialog.destroy();
+            // errorDialog.destroy();
+        }
+    });
+    Script.scriptEnding.connect(errorDialog.destroy);
+    return errorDialog;
+}
+
+/// Rect class used for UI layout.
+module.add('Rect', function (_export) {
+var Rect = _export.Rect = function (xmin, ymin, xmax, ymax) {
     this.x0 = xmin;
     this.y0 = ymin;
     this.x1 = xmax;
@@ -41,6 +97,46 @@ Rect.prototype.getCenter = function () {
         'y': 0.5 * (this.y1 + this.y0)
     };
 }
+
+}); // module Rect
+
+
+/// Wraps 2d overlays w/ a small abstraction layer
+module.add('Overlays', function (_export) {
+var makeOverlay = _export.makeOverlay = function (type, properties) {
+    var overlay = Overlays.addOverlay(type, properties);
+    return {
+        'update': function (properties) {
+            Overlays.editOverlay(overlay, properties);
+        },
+        'destroy': function () {
+            Overlays.deleteOverlay(overlay);
+        },
+        'getId': function () {
+            return overlay;
+        }
+    }
+}
+/// Wraps TextOverlay
+_export.makeTextOverlay = function (properties) {
+    if (properties && properties.backgroundColor.alpha !== undefined)
+        properties.backgroundAlpha = properties.backgroundColor.alpha;
+    if (properties && properties.color.alpha !== undefined)
+        properties.alpha = properties.color.alpha;
+    return makeOverlay.call(this, 'text', properties);
+}
+/// Wraps ImageOverlay
+_export.makeImageOverlay = function (properties) {
+    if (properties && properties.color.alpha !== undefined)
+        properties.alpha = properties.color.alpha;
+    return makeOverlay.call(this, 'image', properties);
+}
+}); // module OverlayAbstraction
+
+
+// We actually use this abstraction to implement module error handling
+
+// UIWidgets.abortWithError("foo");
 
 // var __trace = new Array();
 // var __traceDepth = 0;
@@ -77,6 +173,12 @@ Rect.prototype.getCenter = function () {
 //         }
 //     };
 // }
+
+module.add('UI', function (_exports) {
+
+var Rect = _exports.Rect;
+var makeTextOverlay = _exports.makeTextOverlay;
+var makeImageOverlay = _exports.makeImageOverlay;
 
 /// UI namespace
 var UI = this.UI = {};
@@ -130,32 +232,6 @@ UI.setDefaultVisibility = function (visible) {
 }
 
 /// Wrapper around the overlays impl
-function makeOverlay(type, properties) {
-    var overlay = Overlays.addOverlay(type, properties);
-    return {
-        'update': function (properties) {
-            Overlays.editOverlay(overlay, properties);
-        },
-        'destroy': function () {
-            Overlays.deleteOverlay(overlay);
-        },
-        'getId': function () {
-            return overlay;
-        }
-    }
-}
-function makeTextOverlay(properties) {
-    if (properties && properties.backgroundColor.alpha !== undefined)
-        properties.backgroundAlpha = properties.backgroundColor.alpha;
-    if (properties && properties.color.alpha !== undefined)
-        properties.alpha = properties.color.alpha;
-    return makeOverlay('text', properties);
-}
-function makeImageOverlay(properties) {
-    if (properties && properties.color.alpha !== undefined)
-        properties.alpha = properties.color.alpha;
-    return makeOverlay('image', properties);
-}
 
 function setDefaults(properties, defaults) {
     if (properties === undefined)
@@ -188,7 +264,7 @@ var Widget = function () {};
 // Shared methods:
 var __widgetId = 0;
 Widget.prototype.constructor = function (properties) {
-    properties = setDefaults(properties, {
+    properties = setDefaults.call(this, properties, {
         position: { x: 0.0, y: 0.0 },
         visible: ui.defaultVisible,
         actions: {}
@@ -280,7 +356,7 @@ Widget.prototype.updateOverlays = function () {};
 var WidgetStack = UI.WidgetStack = function (properties) {
     Widget.prototype.constructor.call(this, properties);
 
-    properties = setDefaults(properties, {
+    properties = setDefaults.call(this, properties, {
         dir:     '+y',
         border:  { x: 0.0, y: 0.0 },
         padding: { x: 0.0, y: 0.0 },
@@ -301,7 +377,7 @@ var WidgetStack = UI.WidgetStack = function (properties) {
 
     var background = properties.background;
     if (background) {
-        setDefaults(background, {
+        setDefaults.call(this, background, {
             backgroundColor: COLOR_GRAY,
             textColor: COLOR_WHITE
         });
@@ -310,7 +386,7 @@ var WidgetStack = UI.WidgetStack = function (properties) {
         background.width = 1;
         background.height = 1;
         background.visible = false;
-        this.backgroundOverlay = makeTextOverlay(background);
+        this.backgroundOverlay = makeTextOverlay.call(this, background);
     } else {
         this.backgroundOverlay = null;
     }
@@ -398,7 +474,7 @@ WidgetStack.prototype.updateOverlays = function () {
 /// GUI Textured Rect
 var Image = UI.Image = function (properties) {
     Widget.prototype.constructor.call(this, properties);
-    setDefaults(properties, {
+    setDefaults.call(this, properties, {
         width: 1.0, height: 1.0,
         color: COLOR_WHITE,
     });
@@ -465,7 +541,7 @@ Image.prototype.updateOverlays = function () {
 var Box = UI.Box = function (properties) {
     Widget.prototype.constructor.call(this, properties);
 
-    properties = setDefaults(properties, {
+    properties = setDefaults.call(this, properties, {
         width: 10,
         height: 10
     });
@@ -476,7 +552,7 @@ var Box = UI.Box = function (properties) {
     properties.y = this.position.y;
     properties.visible = this.isVisible();
 
-    this.overlay = makeTextOverlay(properties);
+    this.overlay = makeTextOverlay.call(this, properties);
 };
 Box.prototype = new Widget();
 Box.prototype.constructor = Box;
@@ -512,7 +588,7 @@ Box.prototype.updateOverlays = function () {
 }
 
 var Label = UI.Label = function (properties) {
-    properties = setDefaults(properties, {
+    properties = setDefaults.call(this, properties, {
         text: "", width: 220, height: 20,
         color: COLOR_WHITE
     });
@@ -536,7 +612,7 @@ Label.prototype.setText = function (text) {
 var Slider = UI.Slider = function (properties) {
     Box.prototype.constructor.call(this, properties);
 
-    properties = setDefaults({
+    properties = setDefaults.call(this, {
         value: 0.0, maxValue: 1.0, minValue: -1.0,
         padding: { x: 4, y: 4 },
         onValueChanged: function () {},
@@ -597,14 +673,14 @@ Slider.prototype.setValue = function (value) {
 var Checkbox = UI.Checkbox = function (properties) {
     Box.prototype.constructor.call(this, properties);
 
-    properties = setDefaults(properties, {
+    properties = setDefaults.call(this, properties, {
         checked: true,
         square: true,
         padding: { x: 4, y: 4 },
         checkMark: {}
     });
 
-    setDefaults(properties.checkMark, {
+    setDefaults.call(this, properties.checkMark, {
         backgroundColor: rgba(77, 185, 77, 1.0),
     });
     properties.checkMark.visible = this.checked;
@@ -653,10 +729,6 @@ Checkbox.prototype.applyLayout = function () {
         this.position.y + (this.height - this.checkMark.height) * 0.5
     );
 }
-
-
-
-
 
 UI.addAttachment = function (target, rel, update) {
     attachment = {
@@ -1015,9 +1087,18 @@ UI.printWidgets = function () {
     });
 }
 
+});
+
+modules.Rect.load.call(this, _export);
+modules.Overlays.load.call(this, _export);
+modules.UI.load.call(this, _export);
+
 // Register events
 // Controller.mousePressEvent.connect(UI.handleMousePress);
 // Controller.mouseMoveEvent.connect(UI.handleMouseMove);
 // Controller.mouseReleaseEvent.connect(UI.handleMouseRelease);
+};
 
 })();
+
+

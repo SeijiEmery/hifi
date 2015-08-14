@@ -7,11 +7,19 @@
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
-
+print("including from widgets-example.js");
 Script.include('../libraries/uiwidgets.js');
-(function () {
-    UI.init.apply(this);
-})();
+print("loading from widgets-example.js");
+
+
+// (function () {
+//     UI.init.apply(this);
+// })();
+
+
+var runWidgetsExample = function (_imports) {
+
+var UI = _imports.UI;
 
 var ICONS_URL = 'https://s3.amazonaws.com/hifi-public/marketplace/hificontent/Scripts/planets/images/';
 
@@ -360,6 +368,113 @@ function teardown() {
 
     // etc...
 };
+Script.scriptEnding.connect(teardown);
+
+
+};
+
+
+
+
+(function () {
+    // Stacktrace (http://helephant.com/2007/05/12/diy-javascript-stack-trace/)
+    // Function.prototype.trace = function() {
+    //     var trace = [];
+    //     var current = this;
+    //     while(current) {
+    //         trace.push(current.signature());
+    //         current = current.caller;
+    //     }
+    //     return trace;
+    // }
+    // Function.prototype.signature = function() {
+    //     var signature = {
+    //         name: this.getName(),
+    //         params: [],
+    //         toString: function() {
+    //             var params = this.params.length > 0 ?
+    //                 "'" + this.params.join("', '") + "'" : "";
+    //             return this.name + "(" + params + ")"
+    //         }
+    //     };
+    //     if(this.arguments)
+    //     {
+    //         for(var x=0; x<this .arguments.length; x++)
+    //             signature.params.push(this.arguments[x]);
+    //     }
+    //     return signature;
+    // }
+    // Function.prototype.getName = function() {
+    //     if(this.name)
+    //         return this.name;
+    //     var definition = this.toString().split("\n")[0];
+    //     var exp = /^function ([^\s(]+).+/|>;
+    //     if(exp.test(definition))
+    //         return definition.split("\n")[0].replace(exp, "$1") || "anonymous";
+    //     return "anonymous";
+    // }
+
+    // Try loading the library + script
+    // Breaks cleanly on errors w/ a overlay displaying the stack trace.
+
+    var _call = Function.prototype.call;
+    var _apply = Function.prototype.apply;
+    var trace = [];
+    Function.prototype.call = function () {
+        try {
+            trace.push(this);
+            var rv = _call.apply(this, arguments);
+            trace.pop(this);
+            return rv;
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    try {
+        UIWidgets.load.call(this);
+        runWidgetsExample.call(this);
+    } catch (e) {
+        var callstack = [];
+        var currentFunction = arguments.callee.caller;
+        while (currentFunction) {
+            var fn = currentFunction.toString();
+            var fname = fn.substring(fn.indexOf("function") + 8, fn.indexOf('')) || 'anonymous';
+            callstack.push(fname);
+            currentFunction = currentFunction.caller;
+        }
+
+
+        var brief = function (n) { 
+            return function (f) {
+                var lines = (''+f).split('\n');
+                return lines.length <= n ? lines.join('\n    ') : lines.slice(0, n).join('\n    ') + '\n...';
+            }
+        }
+
+
+
+
+        var errorMsg = e + '\n    stack trace: (' + trace.length + ')\n' + trace.reverse().map(brief(8)).join('\n');
+        // +
+            // '    caller: ' + UIWidgets.load.caller + "\n" + 
+            // '    Error.stack: ' + e.stack + '\n' + 
+            // '    manual callstack: ' + (callstack.join('\n') || null) + '\n' +
+            // Object.keys(e).map(function (k) { "'" + k + "': " + e[k]; }).join('\n');
+
+        var errDialog = UIWidgets.abortWithError(errorMsg);
+
+        Script.errorMessage.connect(function (msg) {
+            errorMessage += '\nnew line: \n' + msg;
+            errDialog.update({ text: errorMessage });
+        });
+        throw e;
+    }
+    Function.prototype.call = _call;
+})();
+
+
+
 
 // var inputHandler = {
 //     onMouseMove: function (event) {
@@ -382,4 +497,3 @@ function teardown() {
 // Controller.mouseMoveEvent.connect(UI.handleMouseMove);
 // Controller.mouseReleaseEvent.connect(UI.handleMouseRelease);
 
-Script.scriptEnding.connect(teardown);
