@@ -9,32 +9,7 @@
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 
-
-(function(){
-
-// Setup externals
-// (function() {   
-//     // We need a Vec2 impl, with add() and a clone function. If this is not part of hifi, we'll just add it:
-//     if (this.Vec2 == undefined) {
-//         var Vec2 = this.Vec2 = function (x, y) {
-//             this.x = x || 0.0;
-//             this.y = y || 0.0;
-//         }
-//         Vec2.sum = function (a, b) {
-//             return new Vec2(a.x + b.x, a.y + b.y);
-//         }
-//         Vec2.clone = function (v) {
-//             return new Vec2(v.x, v.y);
-//         }
-//     } else if (this.Vec2.clone == undefined) {
-//         print("Vec2 exists; adding Vec2.clone");
-//         this.Vec2.clone = function (v) {
-//             return { 'x': v.x || 0.0, 'y': v.y || 0.0 };
-//         }
-//     } else {
-//         print("Vec2...?");
-//     }
-// })();
+(function() {
 
 var Rect = function (xmin, ymin, xmax, ymax) {
     this.x0 = xmin;
@@ -67,41 +42,41 @@ Rect.prototype.getCenter = function () {
     };
 }
 
-var __trace = new Array();
-var __traceDepth = 0;
+// var __trace = new Array();
+// var __traceDepth = 0;
 
-var assert = function (cond, expr) {
-    if (!cond) {
-        var callstack = "";
-        var maxRecursion = 10;
-        caller = arguments.callee.caller;
-        while (maxRecursion > 0 && caller) {
-            --maxRecursion;
-            callstack += ">> " + caller.toString();
-            caller = caller.caller;
-        }
-        throw new Error("assertion failed: " + expr + " (" + cond + ")" + "\n" +
-            "Called from: " + callstack + " " +
-            "Traceback: \n\t" + __trace.join("\n\t"));
-    }
-}
-var traceEnter = function(fcn) {
-    var l = __trace.length;
-    // print("TRACE ENTER: " + (l+1));
-    s = "";
-    for (var i = 0; i < __traceDepth+1; ++i)
-        s += "-";
-    ++__traceDepth;
-    __trace.push(s + fcn);
-    __trace.push(__trace.pop() + ":" + this);
-    return {
-        'exit': function () {
-            --__traceDepth;
-            // while (__trace.length != l)
-                // __trace.pop();
-        }
-    };
-}
+// var assert = function (cond, expr) {
+//     if (!cond) {
+//         var callstack = "";
+//         var maxRecursion = 10;
+//         caller = arguments.callee.caller;
+//         while (maxRecursion > 0 && caller) {
+//             --maxRecursion;
+//             callstack += ">> " + caller.toString();
+//             caller = caller.caller;
+//         }
+//         throw new Error("assertion failed: " + expr + " (" + cond + ")" + "\n" +
+//             "Called from: " + callstack + " " +
+//             "Traceback: \n\t" + __trace.join("\n\t"));
+//     }
+// }
+// var traceEnter = function(fcn) {
+//     var l = __trace.length;
+//     // print("TRACE ENTER: " + (l+1));
+//     s = "";
+//     for (var i = 0; i < __traceDepth+1; ++i)
+//         s += "-";
+//     ++__traceDepth;
+//     __trace.push(s + fcn);
+//     __trace.push(__trace.pop() + ":" + this);
+//     return {
+//         'exit': function () {
+//             --__traceDepth;
+//             // while (__trace.length != l)
+//                 // __trace.pop();
+//         }
+//     };
+// }
 
 /// UI namespace
 var UI = this.UI = {};
@@ -124,7 +99,7 @@ var rgb = UI.rgb = function (r, g, b) {
 var rgba = UI.rgba = function (r, g, b, a) {
     if (typeof(r) == 'string')
         return rgb(r);
-    return { 'red': r || 0, 'green': g || 0, 'blue': b || 0, 'a': a };
+    return { 'red': r || 0, 'green': g || 0, 'blue': b || 0, 'alpha': a || 1.0 };
 }
 
 /// Protected UI state
@@ -137,18 +112,18 @@ var ui = {
 ui.complain = function (msg) {
     print("WARNING (uiwidgets.js): " + msg);
 }
-ui.errorHandler = function (err) {
-    print(err);
-}
-ui.assert = function (condition, message) {
-    if (!condition) {
-        message = "FAILED ASSERT (uiwidgets.js): " + message || "(" + condition + ")";
-        ui.errorHandler(message);
-        if (typeof(Error) !== 'undefined')
-            throw new Error(message);
-        throw message;
-    }
-}
+// ui.errorHandler = function (err) {
+//     print(err);
+// }
+// ui.assert = function (condition, message) {
+//     if (!condition) {
+//         message = "FAILED ASSERT (uiwidgets.js): " + message || "(" + condition + ")";
+//         ui.errorHandler(message);
+//         if (typeof(Error) !== 'undefined')
+//             throw new Error(message);
+//         throw message;
+//     }
+// }
 
 UI.setDefaultVisibility = function (visible) {
     ui.defaultVisible = visible;
@@ -159,19 +134,49 @@ function makeOverlay(type, properties) {
     var overlay = Overlays.addOverlay(type, properties);
     return {
         'update': function (properties) {
-            var _TRACE = traceEnter.call(this, "Overlay.update");
             Overlays.editOverlay(overlay, properties);
-            _TRACE.exit();
         },
         'destroy': function () {
-            var _TRACE = traceEnter.call(this, "Overlay.destroy");
             Overlays.deleteOverlay(overlay);
-            _TRACE.exit();
         },
         'getId': function () {
             return overlay;
         }
     }
+}
+function makeTextOverlay(properties) {
+    if (properties && properties.backgroundColor.alpha !== undefined)
+        properties.backgroundAlpha = properties.backgroundColor.alpha;
+    if (properties && properties.color.alpha !== undefined)
+        properties.alpha = properties.color.alpha;
+    return makeOverlay('text', properties);
+}
+function makeImageOverlay(properties) {
+    if (properties && properties.color.alpha !== undefined)
+        properties.alpha = properties.color.alpha;
+    return makeOverlay('image', properties);
+}
+
+function setDefaults(properties, defaults) {
+    if (properties === undefined)
+        properties = {};
+    for (var k in defaults) {
+        if (properties[k] === undefined)
+            properties[k] = defaults[k];
+    }
+    return properties;
+}
+function extractProperties(obj, propertyList, to) {
+    to = to || {};
+    propertyList.forEach(function (k) {
+        to[k] = obj[k];
+    });
+    return to;
+}
+function setProperties(obj, properties, propertyList) {
+    propertyList.forEach(function (k) {
+        obj[k] = properties[k];
+    });
 }
 
 var COLOR_WHITE = rgb(255, 255, 255);
@@ -182,18 +187,27 @@ var Widget = function () {};
 
 // Shared methods:
 var __widgetId = 0;
-Widget.prototype.constructor = function () {
-    this.position = { 'x': 0.0, 'y': 0.0 };
+Widget.prototype.constructor = function (properties) {
+    properties = setDefaults(properties, {
+        position: { x: 0.0, y: 0.0 },
+        visible: ui.defaultVisible,
+        actions: {}
+    });
+
+    this.position = properties.position || { x: 0.0, y: 0.0 };
+    this.visible = properties.visible || ui.defaultVisible;
+    this.actions = properties.actions || {};
+
     this.dimensions = null;
-
-    this.visible = ui.defaultVisible;
     this.parentVisible = null;
-
-    this.actions = {};
-    this._dirty = true;
     this.parent = null;
 
-    this.id = __widgetId++;
+    // Set readonly id
+    Object.defineProperty(this, 'id', {
+        value: __widgetId++,
+        writable: false
+    });
+    // Register into global list (used for relayout)
     ui.widgetList.push(this);
 }
 Widget.prototype.setPosition = function (x, y) {
@@ -264,14 +278,15 @@ Widget.prototype.updateOverlays = function () {};
 ///         Properties to use for the background overlay (if defined).
 ///
 var WidgetStack = UI.WidgetStack = function (properties) {
-    var _TRACE = traceEnter.call(this, "WidgetStack.constructor()");
-    Widget.prototype.constructor.call(this);
-    assert(ui.widgetList[ui.widgetList.length-1] === this, "ui.widgetList.back() == this");
+    Widget.prototype.constructor.call(this, properties);
 
-    properties = properties || {};
-    properties['dir'] = properties['dir'] || '+y';
+    properties = setDefaults(properties, {
+        dir:     '+y',
+        border:  { x: 0.0, y: 0.0 },
+        padding: { x: 0.0, y: 0.0 },
+    });
 
-    var dir = undefined;
+    var dir = null;
     switch(properties['dir']) {
         case '+y': dir = { 'x': 0.0, 'y': 1.0 }; break;
         case '-y': dir = { 'x': 0.0, 'y': -1.0 }; break;
@@ -279,32 +294,26 @@ var WidgetStack = UI.WidgetStack = function (properties) {
         case '-x': dir = { 'x': -1.0, 'y': 0.0 }; break;
         default: ui.complain("Unrecognized UI.WidgetStack property 'dir': \"" + dir + "\"");
     }
-    dir = dir || { 'x': 1.0, 'y': 0.0 };
+    this.layoutDir = dir || { 'x': 1.0, 'y': 0.0 };
+    this.border = properties.border;
+    this.padding = properties.padding;
+    this.widgets = new Array();
 
-    this.layoutDir = dir;
-    this.border  = properties.border  || { 'x': 0.0, 'y': 0.0 };
-    this.padding = properties.padding || { 'x': 0.0, 'y': 0.0 };
-    this.visible = properties.visible != undefined ? properties.visible : this.visible;
-
-    if (properties.background) {
-        var background = properties.background;
-        background.x = this.position ? this.position.x : 0;
-        background.y = this.position ? this.position.y : 0;
-        background.width  = background.width  || 100.0;
-        background.height = background.height || 100.0;
-        background.backgroundColor = background.backgroundColor || COLOR_GRAY;
-        background.backgroundAlpha = background.backgroundAlpha || 0.5;
-        background.textColor = background.textColor || COLOR_WHITE;
-        background.alpha = background.alpha || 1.0;
-        background.visible = this.visible;
-        this.backgroundOverlay = makeOverlay("text", background);
+    var background = properties.background;
+    if (background) {
+        setDefaults(background, {
+            backgroundColor: COLOR_GRAY,
+            textColor: COLOR_WHITE
+        });
+        background.x = this.position.x;
+        background.y = this.position.y;
+        background.width = 1;
+        background.height = 1;
+        background.visible = false;
+        this.backgroundOverlay = makeTextOverlay(background);
     } else {
         this.backgroundOverlay = null;
     }
-
-    this.widgets = new Array();
-
-    _TRACE.exit();
 }
 WidgetStack.prototype = new Widget();
 WidgetStack.prototype.constructor = WidgetStack;
@@ -330,20 +339,11 @@ WidgetStack.prototype.destroy = function () {
         this.backgroundOverlay = null;
     }
 }
-WidgetStack.prototype.setColor = function (color) {
-    if (arguments.length != 1) {
-        color = rgba.apply(arguments);
-    }
-    this.backgroundOverlay.update({
-        'color': color,
-        'alpha': color.a
-    });
-}
 var sumOf = function (list, f) {
     var sum = 0.0;
     list.forEach(function (elem) {
         sum += f(elem);
-    })
+    });
     return sum;
 }
 WidgetStack.prototype.calculateDimensions = function () {
@@ -395,26 +395,21 @@ WidgetStack.prototype.updateOverlays = function () {
     }
 }
 
-
 /// GUI Textured Rect
 var Image = UI.Image = function (properties) {
-    Widget.prototype.constructor.call(this);
+    Widget.prototype.constructor.call(this, properties);
+    setDefaults(properties, {
+        width: 1.0, height: 1.0,
+        color: COLOR_WHITE,
+    });
+    this.width = properties.width;
+    this.height = properties.height;
 
-    this.visible = properties.visible != undefined ? properties.visible : this.visible;
-    this.width  = properties.width  || 1.0;
-    this.height = properties.height || 1.0;
+    properties.visible = this.isVisible();
+    properties.x = this.position.x;
+    properties.y = this.position.y;
 
-    var imageProperties = {
-        'color':    properties.color || COLOR_GRAY,
-        'alpha':    properties.alpha || 1.0,
-        'imageURL': properties.imageURL,
-        'width':  this.width,
-        'height': this.height,
-        'x': this.position ? this.position.x : 0.0,
-        'y': this.position ? this.position.y : 0.0,
-        'visible': this.visible
-    }
-    this.imageOverlay = makeOverlay("image", imageProperties);
+    this.imageOverlay = makeImageOverlay(properties);
 }
 Image.prototype = new Widget();
 Image.prototype.constructor = Image;
@@ -445,9 +440,10 @@ Image.prototype.setColor = function (color) {
     }
     this.imageOverlay.update({
         'color': color,
-        'alpha': color.a
+        'alpha': color.alpha
     });
 }
+
 Image.prototype.getWidth = function () {
     return this.width;
 }
@@ -467,20 +463,20 @@ Image.prototype.updateOverlays = function () {
 
 /// GUI Rect. Internally implemented using a text overlay.
 var Box = UI.Box = function (properties) {
-    Widget.prototype.constructor.call(this);
+    Widget.prototype.constructor.call(this, properties);
 
-    properties = properties || {};
-    properties.width = properties.width || 10;
-    properties.height = properties.height || 10;
-    properties.visible = properties.visible !== undefined ? properties.visible : this.visible;
-    properties.x = this.position.x;
-    properties.y = this.position.y;
-
+    properties = setDefaults(properties, {
+        width: 10,
+        height: 10
+    });
     this.width = properties.width;
     this.height = properties.height;
-    this.visible = properties.visible;
 
-    this.overlay = makeOverlay("text", properties);
+    properties.x = this.position.x;
+    properties.y = this.position.y;
+    properties.visible = this.isVisible();
+
+    this.overlay = makeTextOverlay(properties);
 };
 Box.prototype = new Widget();
 Box.prototype.constructor = Box;
@@ -516,24 +512,10 @@ Box.prototype.updateOverlays = function () {
 }
 
 var Label = UI.Label = function (properties) {
-    properties = properties || {};
-    if (properties.text === undefined || properties.text === null)
-        properties.text = "< bad UI.Label call (text) >";
-
-    if (!properties.width) {
-        ui.complain("UI.Label constructor expected width property, not " + properties.width);
-        this.text = "< bad UI.Label call (width) >";
-        properties.width = 220;
-    }
-    if (!properties.height) {
-        ui.complain("UI.Label constructor expected height property, not " + properties.height);
-        this.text = "< bad UI.Label call (height) >";
-        properties.height = 20;
-    }
-    properties.color = properties.color || COLOR_WHITE;
-    properties.alpha = properties.alpha || properties.color.a || 1.0;
-    properties.backgroundAlpha = properties.backgroundAlpha || 0.0;
-
+    properties = setDefaults(properties, {
+        text: "", width: 220, height: 20,
+        color: COLOR_WHITE
+    });
     Box.prototype.constructor.call(this, properties);
 };
 Label.prototype = new Box();
@@ -553,33 +535,39 @@ Label.prototype.setText = function (text) {
 ///     onValueChanged
 var Slider = UI.Slider = function (properties) {
     Box.prototype.constructor.call(this, properties);
-    // print("CONSTRUCTING SLIDER")
-    this.value = properties.value || 0.0;
-    this.maxValue = properties.maxValue || 1.0;
-    this.minValue = properties.minValue || 0.0;
-    this.padding = properties.padding || {
-        x: 4, y: 4
-    }
-    this.onValueChanged = properties.onValueChanged || function () {};
+
+    properties = setDefaults({
+        value: 0.0, maxValue: 1.0, minValue: -1.0,
+        padding: { x: 4, y: 4 },
+        onValueChanged: function () {},
+        slider: {}
+    });
+    extractProperties(properties, ['value', 'maxValue', 'minValue', 'padding', 'onValueChanged'], this);
+
+    properties.slider.visible = false;
+    properties.slider.width  = Math.max(this.width  - this.padding.x, 0.0);
+    properties.slider.height = Math.max(this.height - this.padding.y, 0.0);
 
     this.slider = new Box(properties.slider);
+    this.slider.visible = true;
     this.slider.parent = this;
+    this.applyLayout();
 
+    // Register slider drag actions
     var widget = this;
-    var updateSliderPos = function (event) {
+    var dragSlider = function (event) {
         var rx = Math.max(event.x * 1.0 - widget.position.x - widget.slider.width * 0.5, 0.0);
         var width = Math.max(widget.width - widget.slider.width - widget.padding.x * 2.0, 0.0);
         var v = Math.min(rx, width) / (width || 1);
-
         widget.value = widget.minValue + (
             widget.maxValue - widget.minValue) * v;
         widget.onValueChanged(widget.value);
         UI.updateLayout();
     }
-    this.addAction('onMouseDown', updateSliderPos);
-    this.slider.addAction('onDrag', updateSliderPos);
-    this.addAction('onDrag', updateSliderPos);
-    this.slider.addAction('onDrag', updateSliderPos);
+    this.addAction('onMouseDown', dragSlider);
+    this.addAction('onDrag', dragSlider);
+    this.slider.addAction('onMouseDown', dragSlider);
+    this.slider.addAction('onDrag', dragSlider);
 };
 Slider.prototype = new Box();
 Slider.prototype.constructor = Slider;
@@ -609,33 +597,38 @@ Slider.prototype.setValue = function (value) {
 var Checkbox = UI.Checkbox = function (properties) {
     Box.prototype.constructor.call(this, properties);
 
-    this.checked = properties.checked !== undefined ? properties.checked : true;
-    this.padding = properties.padding || { x: 4, y: 4 };
+    properties = setDefaults(properties, {
+        checked: true,
+        square: true,
+        padding: { x: 4, y: 4 },
+        checkMark: {}
+    });
 
-    properties.checkMark = properties.checkMark || {};
-
-    // Keep square
-    var r = Math.min(this.width - this.padding.x * 2.0, this.height - this.padding.y * 2.0);
-    properties.checkMark.width = properties.checkMark.height = r;
-    properties.checkMark.visible = false;
-    properties.checkMark.backgroundColor = properties.checkMark.backgroundColor || 
-        properties.checkMark.color || rgb(77, 185, 77);
-    properties.checkMark.backgroundAlpha = properties.checkMark.backgroundAlpha ||
-        properties.checkMark.alpha || 1.0;
+    setDefaults(properties.checkMark, {
+        backgroundColor: rgba(77, 185, 77, 1.0),
+    });
+    properties.checkMark.visible = this.checked;
+    properties.checkMark.position = {
+        x: this.position.x + (this.width - this.checkMark.width) * 0.5,
+        y: this.position.y + (this.height - this.checkMark.height) * 0.5
+    };
+    if (properties.square) { 
+        // Constrain inner checkbox to be square (irrespective of outer dimensions)
+        var r = Math.min(this.width - this.padding.x * 2.0, this.height - this.padding.y * 2.0);
+        properties.checkMark.width = properties.checkMark.height = Math.max(r, 1.0);
+    } else {
+        // Inner checkbox can be rectangular
+        properties.checkMark.width = Math.max(this.width - this.padding.x * 2.0, 1.0);
+        properties.checkMark.height = Math.max(this.width - this.padding.y * 2.0, 1.0);
+    }
     this.checkMark = new Box(properties.checkMark);
-    this.checkMark.setVisible(this.checked);
-    this.checkMark.setPosition(
-        this.position.x + (this.width - this.checkMark.width) * 0.5,
-        this.position.y + (this.height - this.checkMark.height) * 0.5
-    );
+    this.checkMark.parent = this;
+    this.onValueChanged = properties.onValueChanged;
 
-    this.onValueChanged = properties.onValueChanged || function () {};
-
-    var widget = this;
-    this.addAction('onClick', function (event) {
+    this.addAction('onClick', function (event, widget) {
         widget.setChecked(!widget.isChecked());
     });
-    this.checkMark.addAction('onClick', function (event) {
+    this.checkMark.addAction('onClick', function (event, widget) {
         widget.setChecked(!widget.isChecked());
     });
 };
