@@ -13,29 +13,28 @@
 (function(){
 
 // Setup externals
-(function() {
-
-// We need a Vec2 impl, with add() and a clone function. If this is not part of hifi, we'll just add it:
-if (this.Vec2 == undefined) {
-    var Vec2 = this.Vec2 = function (x, y) {
-        this.x = x || 0.0;
-        this.y = y || 0.0;
-    }
-    Vec2.sum = function (a, b) {
-        return new Vec2(a.x + b.x, a.y + b.y);
-    }
-    Vec2.clone = function (v) {
-        return new Vec2(v.x, v.y);
-    }
-} else if (this.Vec2.clone == undefined) {
-    print("Vec2 exists; adding Vec2.clone");
-    this.Vec2.clone = function (v) {
-        return { 'x': v.x || 0.0, 'y': v.y || 0.0 };
-    }
-} else {
-    print("Vec2...?");
-}
-})();
+// (function() {   
+//     // We need a Vec2 impl, with add() and a clone function. If this is not part of hifi, we'll just add it:
+//     if (this.Vec2 == undefined) {
+//         var Vec2 = this.Vec2 = function (x, y) {
+//             this.x = x || 0.0;
+//             this.y = y || 0.0;
+//         }
+//         Vec2.sum = function (a, b) {
+//             return new Vec2(a.x + b.x, a.y + b.y);
+//         }
+//         Vec2.clone = function (v) {
+//             return new Vec2(v.x, v.y);
+//         }
+//     } else if (this.Vec2.clone == undefined) {
+//         print("Vec2 exists; adding Vec2.clone");
+//         this.Vec2.clone = function (v) {
+//             return { 'x': v.x || 0.0, 'y': v.y || 0.0 };
+//         }
+//     } else {
+//         print("Vec2...?");
+//     }
+// })();
 
 var Rect = function (xmin, ymin, xmax, ymax) {
     this.x0 = xmin;
@@ -566,7 +565,8 @@ var Slider = UI.Slider = function (properties) {
     this.slider = new Box(properties.slider);
     this.slider.parent = this;
 
-    var updateSliderPos = function (event, widget) {
+    var widget = this;
+    var updateSliderPos = function (event) {
         var rx = Math.max(event.x * 1.0 - widget.position.x - widget.slider.width * 0.5, 0.0);
         var width = Math.max(widget.width - widget.slider.width - widget.padding.x * 2.0, 0.0);
         var v = Math.min(rx, width) / (width || 1);
@@ -576,36 +576,10 @@ var Slider = UI.Slider = function (properties) {
         widget.onValueChanged(widget.value);
         UI.updateLayout();
     }
-
-    var widget = this;
-    this.addAction('onMouseDown', function (event) {
-        sliderRel.x = sliderRel.y = 0.0;
-        // sliderRel.x = widget.slider.width * 0.5;
-        // sliderRel.y = widget.slider.height * 0.5;
-        updateSliderPos(event, widget);
-
-        // hack
-        ui.clickedWidget = ui.draggedWidget = widget.slider;
-    });
-
-    var sliderRel = {};
-    this.slider.addAction('onMouseDown', function (event) {
-        sliderRel.x = widget.slider.position.x - event.x;
-        sliderRel.y = widget.slider.position.y - event.y;
-        event.x += sliderRel.x;
-        event.y += sliderRel.y;
-        updateSliderPos(event, widget);
-    });
-    this.slider.addAction('onDragBegin', function (event) {
-        event.x += sliderRel.x;
-        event.y += sliderRel.y;
-        updateSliderPos(event, widget);
-    })
-    this.slider.addAction('onDragUpdate', function (event) {
-        event.x += sliderRel.x;
-        event.y += sliderRel.y;
-        updateSliderPos(event, widget);
-    })
+    this.addAction('onMouseDown', updateSliderPos);
+    this.slider.addAction('onDrag', updateSliderPos);
+    this.addAction('onDrag', updateSliderPos);
+    this.slider.addAction('onDrag', updateSliderPos);
 };
 Slider.prototype = new Box();
 Slider.prototype.constructor = Slider;
@@ -768,14 +742,9 @@ function dispatchEvent(actions, widget, event) {
     _TRACE.exit();
 }
 
-// Focus state
-ui.focusedWidget = null;
-ui.clickedWidget = null;
-ui.draggedWidget = null;
-
 // Debugging ui
-var statusPos = new Vec2(15, 20);
-var statusDim = new Vec2(500, 20);
+var statusPos = { x: 15, y: 20 };
+var statusDim = { x: 500, y: 20 };
 function makeStatusWidget(defaultText, alpha) {
     var label = new Box({
         text: defaultText,
@@ -939,56 +908,53 @@ var dispatchEvent = function (action, event, widget) {
     }
 }
 
-UI.handleMouseMove = function (event, canStartDrag) {
-    if (canStartDrag === undefined)
-        canStartDrag = true;
-
-    // print("mouse moved x = " + event.x + ", y = " + event.y);
-    var focused = getFocusedWidget(event);
-
-    // print("got focus: " + focused);
-
-    if (canStartDrag && !ui.draggedWidget && ui.clickedWidget && ui.clickedWidget.actions['onDragBegin']) {
-        ui.draggedWidget = ui.clickedWidget;
-        dispatchEvent('onDragBegin', event, ui.draggedWidget);
-    } else if (ui.draggedWidget) {
-        dispatchEvent('onDragUpdate', event, ui.draggedWidget);
-    } else if (focused != ui.focusedWidget) {
-        if (ui.focusedWidget)
-            dispatchEvent('onMouseExit', event, ui.focusedWidget);
+function handleMouseTransition (focused, event) {
+    if (focused != ui.lastFocused) {
+        if (ui.lastFocused)
+            dispatchEvent('onMouseExit', event, ui.lastFocused);
         if (focused)
             dispatchEvent('onMouseOver', event, focused);
-        ui.focusedWidget = focused;
     }
+    ui.lastFocused = focused;
 }
+
+
+ui.dragTarget = null;
 
 UI.handleMousePress = function (event) {
-    print("Mouse clicked");
-    UI.handleMouseMove(event);
-    ui.clickedWidget = ui.focusedWidget;
-    if (ui.clickedWidget) {
-        dispatchEvent('onMouseDown', event, ui.clickedWidget);
+    var focused = getFocusedWidget(event);
+    handleMouseTransition(focused, event);
+    if (focused) {
+        dispatchEvent('onMouseDown', event, focused);
     }
+    ui.dragTarget = focused && focused.actions['onDrag'] ? focused : null;
 }
-
 UI.handleMouseRelease = function (event) {
-    print("Mouse released");
-
-    if (ui.draggedWidget) {
-        dispatchEvent('onDragEnd', event, ui.draggedWidget);
-    } else {
-        UI.handleMouseMove(event, false);
-        if (ui.focusedWidget) {
-            dispatchEvent('onMouseUp', event, ui.focusedWidget);
-
-            if (ui.clickedWidget == ui.focusedWidget) {
-                dispatchEvent('onClick', event, ui.focusedWidget);
-            }
+    var focused = getFocusedWidget(event);
+    if (ui.dragTarget) {
+        dispatchEvent('onMouseUp', event, ui.dragTarget);
+        if (ui.dragTarget == focused) {
+            dispatchEvent('onClick', event, ui.dragTarget);
         }
+    } 
+    handleMouseTransition(focused, event);
+    if (!ui.dragTarget) {
+        dispatchEvent('onMouseUp', event, focused);
+        dispatchEvent('onClick', event, focused);
     }
-    ui.clickedWidget = null;
-    ui.draggedWidget = null;
+    ui.dragTarget = null;
 }
+UI.handleMouseMove = function (event) {
+    var focused = getFocusedWidget(event);
+    if (ui.dragTarget) {
+        dispatchEvent('onDrag', event, ui.dragTarget);
+        dispatchEvent('onDrag', event, ui.dragTarget);
+    } else {
+        handleMouseTransition(focused, event);
+    }
+}
+
+
 
 UI.teardown = function () {
     print("Teardown");
@@ -998,6 +964,44 @@ UI.teardown = function () {
     ui.widgetList = [];
     ui.focusedWidget = null;
 };
+UI.init = function () {
+    this.Controller.mousePressEvent.connect(UI.handleMousePress);
+    this.Controller.mouseMoveEvent.connect(UI.handleMouseMove);
+    this.Controller.mouseReleaseEvent.connect(UI.handleMouseRelease);
+    this.Script.scriptEnding.connect(UI.teardown);
+
+    var _Controller = this.Controller;
+    var _Overlays = this.Overlays;
+    var _Script = this.Script;
+    this.Script.errorMessage.connect(function (message) {
+        var viewDimensions = _Controller.getViewportDimensions();
+        var width  = viewDimensions.x * 0.75;
+        var height = viewDimensions.y * 0.75;
+
+        // UI.teardown();
+        message = "Script running uiwidgets.js crashed with error:\n" + message;
+        var errorDialog = _Overlays.create('text', {
+            text: message, width: width, height: height,
+            backgroundAlpha: 0.5,
+            backgroundColor: rgb(200, 200, 200),
+            color: rgb(255, 100, 100),
+            alpha: 0.9,
+            visible: true,
+            x: 100,
+            y: 100
+            // x: (viewDimensions.x - width) * 0.5, 
+            // y: (viewDimensions.y - height) * 0.5
+        });
+        _Controller.mousePressEvent.connect(function (event) {
+            if (_Overlays.getOverlayAtPoint({ x: event.x, y: event.y }) == errorDialog/*.getId()*/) {
+                _Overlays.deleteOverlay(errorDialog);
+                // errorDialog.destroy();
+            }
+        });
+        _Script.stop();
+    });
+}
+
 UI.setErrorHandler = function (errorHandler) {
     if (typeof(errorHandler) !== 'function') {
         ui.complain("UI.setErrorHandler -- invalid argument: \"" + errorHandler + "\"");
@@ -1017,5 +1021,10 @@ UI.printWidgets = function () {
             (widget.padding ? " padding = " + widget.padding.x + ", " + widget.padding.y : ""));
     });
 }
+
+// Register events
+// Controller.mousePressEvent.connect(UI.handleMousePress);
+// Controller.mouseMoveEvent.connect(UI.handleMouseMove);
+// Controller.mouseReleaseEvent.connect(UI.handleMouseRelease);
 
 })();

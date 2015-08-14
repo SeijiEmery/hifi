@@ -1,59 +1,34 @@
 // 
 //  widgets-example.js
-//  games 
+//  example/examples 
 //  
 //  Copyright 2015 High Fidelity, Inc.
+//
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
+
+Script.include('../libraries/uiwidgets.js');
+(function () {
+    UI.init.apply(this);
+})();
+
+var ICONS_URL = 'https://s3.amazonaws.com/hifi-public/marketplace/hificontent/Scripts/planets/images/';
 
 var paddingX = 8;
 var paddingY = 8;
 var buttonWidth = 30;
 var buttonHeight = 30;
 
-var ICONS_URL = 'https://s3.amazonaws.com/hifi-public/marketplace/hificontent/Scripts/planets/images/';
 
 var panelX = 1250;
 var panelY = 500;
 var panelWidth = 50;
 var panelHeight = 210;
 
-// var mainPanel = new UIPanel(panelX, panelY, panelWidth, panelHeight);
-// var systemViewButton = mainPanel.addImage('solarsystems');
-// var zoomButton = mainPanel.addImage('magnifier');
-// var satelliteButton = mainPanel.addImage('satellite');
-// var settingsButton = mainPanel.addImage('settings');
-// var stopButton = mainPanel.addImage('close');
-// 
-// mainPanel.show();
-// 
-// var systemViewPanel = new UIPanel(panelX - 120, panelY, 120, 40);
-// var reverseButton = systemViewPanel.addImage('reverse');
-// var pauseButton = systemViewPanel.addImage('playpause');
-// var forwardButton = systemViewPanel.addImage('forward');
-// 
-// var zoomPanel = new UIPanel(panelX - 60, panelY + buttonHeight + paddingY, 650, 50);
-// for (var i = 0; i < planets.length; ++i) {
-    // zoomPanel.addText(planets[i].name);
-// }
-Script.include('../libraries/uiwidgets.js');
 
 UI.setDefaultVisibility(true);
-UI.setErrorHandler(function(err) {
-    teardown();
-    // print(err);
-    // Script.stop();
-});
 
-// Controller.mouseMoveEvent.connect(function panelMouseMoveEvent(event) { return settings.mouseMoveEvent(event); });
-//     Controller.mousePressEvent.connect( function panelMousePressEvent(event) { return settings.mousePressEvent(event); });
-//     Controller.mouseDoublePressEvent.connect( function panelMouseDoublePressEvent(event) { return settings.mouseDoublePressEvent(event); });
-//     Controller.mouseReleaseEvent.connect(function(event) { return settings.mouseReleaseEvent(event); });
-//     Controller.keyPressEvent.connect(function(event) { return settings.keyPressEvent(event); });
-
-// var ICON_WIDTH  = 50.0;
-// var ICON_HEIGHT = 50.0;
 var ICON_WIDTH = 40.0;
 var ICON_HEIGHT = 40.0;
 var ICON_COLOR = UI.rgba(45, 45, 45, 0.7);
@@ -100,25 +75,21 @@ function makeDraggable (panel, target) {
     var dragStart = null;
     var initialPos = null;
 
-    panel.addAction('onDragBegin', function (event) {
+    panel.addAction('onMouseDown', function (event) {
         dragStart = { x: event.x, y: event.y };
         initialPos = { x: target.position.x, y: target.position.y };
     });
-    panel.addAction('onDragUpdate', function (event) {
+    panel.addAction('onDrag', function (event) {
         target.setPosition(
             initialPos.x + event.x - dragStart.x,
             initialPos.y + event.y - dragStart.y
         );
         UI.updateLayout();
     });
-    panel.addAction('onDragEnd', function () {
+    panel.addAction('onMouseUp', function () {
         dragStart = dragEnd = null;
     });
 }
-
-// var panelContainer = new UI.WidgetContainer();
-// panelContainer.setPosition(500, 250);
-// panelContainer.setVisible(true);
 
 var demoPane = addPanel({ dir: '+y' });
 var demoLabel = demoPane.add(new UI.Label({
@@ -146,9 +117,7 @@ var debugEvents = [
     'onMouseExit', 
     'onMouseDown', 
     'onMouseUp',
-    'onDragBegin',
-    'onDragEnd',
-    'onDragUpdate'
+    'onDrag'
 ];
 addDebugActions(demoPane, "(container) ", debugEvents);
 addDebugActions(demoButton, "(button) ", debugEvents);
@@ -180,11 +149,6 @@ debugToggle.addAction('onClick', function () {
     UI.debug.setVisible(!UI.debug.isVisible());
 });
 
-// debugEvents.forEach(function (action) {
-//     resizablePanel.addAction(action, function (event, widget) {
-//         widget.setText(action + " " + widget);
-//     });
-// })
 
 function join(obj) {
     var s = "{";
@@ -197,11 +161,6 @@ function join(obj) {
         return s + " }";
     return s + "}";
 }
-
-// resizablePanel.getOverlay().update({
-//     text: "" + join(resizablePanel.actions)
-// });
-
 
 setText = addDebugActions = undefined;
 
@@ -323,7 +282,10 @@ var checkbox = checkBoxLayout.add(new UI.Checkbox({
     backgroundAlpha: 0.9,
     checked: false,
     onValueChanged: function (red) {
-         zoomPanel.getOverlay().update({
+
+        this.doBar();
+
+        zoomPanel.getOverlay().update({
         // backgroundAlpha: 0.1,
         backgroundColor: red ? redColor : defaultColor
     });
@@ -387,26 +349,6 @@ stopButton.addAction('onClick', function() {
     teardown();
 });
 
-// Panel drag behavior
-// (click + drag on border to drag)
-(function () {
-    var dragged = null;
-    this.startDrag = function (dragAction) {
-        dragged = dragAction;
-    }
-    this.updateDrag = function (event) {
-        if (dragged) {
-            print("Update drag");
-            dragged.updateDrag(event);
-        }
-    }
-    this.clearDrag = function (event) {
-        if (dragged)
-            print("End drag");
-        dragged = null;
-    }
-})();
-
 var buttons = icons;
 
 buttons.map(addColorToggle);
@@ -419,21 +361,25 @@ function teardown() {
     // etc...
 };
 
-var inputHandler = {
-    onMouseMove: function (event) {
-        updateDrag(event);
-        UI.handleMouseMove(event);
-    },
-    onMousePress: function (event) {
-        UI.handleMousePress(event);
-    },
-    onMouseRelease: function (event) {
-        clearDrag(event);
-        UI.handleMouseRelease(event);
-    }
-};
-Controller.mousePressEvent.connect(inputHandler.onMousePress);
-Controller.mouseMoveEvent.connect(inputHandler.onMouseMove);
-Controller.mouseReleaseEvent.connect(inputHandler.onMouseRelease);
+// var inputHandler = {
+//     onMouseMove: function (event) {
+//         // updateDrag(event);
+//         UI.handleMouseMove(event);
+//     },
+//     onMousePress: function (event) {
+//         UI.handleMousePress(event);
+//     },
+//     onMouseRelease: function (event) {
+//         // clearDrag(event);
+//         UI.handleMouseRelease(event);
+//     }
+// };
+// Controller.mousePressEvent.connect(inputHandler.onMousePress);
+// Controller.mouseMoveEvent.connect(inputHandler.onMouseMove);
+// Controller.mouseReleaseEvent.connect(inputHandler.onMouseRelease);
+
+// Controller.mousePressEvent.connect(UI.handleMousePress);
+// Controller.mouseMoveEvent.connect(UI.handleMouseMove);
+// Controller.mouseReleaseEvent.connect(UI.handleMouseRelease);
 
 Script.scriptEnding.connect(teardown);
