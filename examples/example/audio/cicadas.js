@@ -25,6 +25,7 @@ var AUDIO_FILES = [];
 for (var i = 1; i < 8; ++i) {
 	AUDIO_FILES.push(SOUNDS_URL + "cicada_" + i + ".wav");
 }
+// AUDIO_FILES = [ SOUNDS_URL + "cicada_4.wav" ]
 
 var LOG_ENTITY_CREATION_MESSAGES = false;
 var USE_DEBUG_ENTITIES = true;
@@ -149,12 +150,17 @@ var USE_AUDIO = true;
 	CricketAudio.prototype.playRandom = function () {
 		// if (this.audioInjector && Audio.isInjectorPlaying(this.sound)) {
 		if (this.isPlaying()) {
-			logMessage("Stopping audio injector to play random");
-			// Audio.stopInjector(this.audioInjector);
+			logMessage("Audio alreay playing (called by playRandom)");
+			return;
+		}
+		if (this.audioInjector) {
 			this.audioInjector.stop();
 		}
 		this.sound = this.getRandom();
-		this.play();
+		this.audioInjector = Audio.playSound(this.sound, {
+			position: this.position,
+			loop: false
+		});
 	}
 	CricketAudio.prototype.play = function () {
 		if (!this.isPlaying()) {
