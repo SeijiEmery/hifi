@@ -14,13 +14,17 @@ Script.include('http://public.highfidelity.io/scripts/libraries/uiwidgets.js');
 // Cicadas script
 (function () {
 
-var NUM_CICADAS = 20;
+var NUM_CICADAS = 40;
 var RADIUS = 10.0;
 var cicadaTimer = {
 	min: 1.0,
 	max: 4.0
 };
 var SOUNDS_URL = "http://public.highfidelity.io/sounds/Animals/cicadas/";
+var AUDIO_FILES = [];
+for (var i = 1; i < 8; ++i) {
+	AUDIO_FILES.push(SOUNDS_URL + "cicada_" + i + ".wav");
+}
 
 var LOG_ENTITY_CREATION_MESSAGES = false;
 var USE_DEBUG_ENTITIES = true;
@@ -155,13 +159,15 @@ var USE_AUDIO = true;
 	CricketAudio.prototype.play = function () {
 		if (!this.isPlaying()) {
 			if (this.audioInjector) {
-				this.audioInjector.stop();
+				// this.audioInjector.stop();
+				this.audioInjector.restart();
 				// Audio.stopInjector(this.audioInjector);
+			} else {
+				this.audioInjector = Audio.playSound(this.sound, {
+					position: this.position,
+					loop: false
+				});
 			}
-			this.audioInjector = Audio.playSound(this.sound, {
-				position: this.position,
-				loop: false
-			});
 		} else {
 			logMessage("Called .play() on already running audio injector -- ignoring");
 		}
@@ -175,13 +181,13 @@ var USE_AUDIO = true;
 			// Audio.stopInjector(this.audioInjector);
 		}
 	}
-	var cricketSounds = [];
-	for (var i = 1; i < 8; ++i) {
-		cricketSounds.push(SOUNDS_URL + "cicada" + i + ".wav");
-	}
+	// var cricketSounds = [];
+	// for (var i = 1; i < 8; ++i) {
+	// 	cricketSounds.push(SOUNDS_URL + "cicada" + i + ".wav");
+	// }
 	CricketAudio.prototype.getRandom = function () {
-		var n = Math.floor(Math.random() * cricketSounds.length);
-		return SoundCache.getSound(cricketSounds[n]);
+		var n = Math.floor(Math.random() * AUDIO_FILES.length);
+		return SoundCache.getSound(AUDIO_FILES[n]);
 	}
 })();
 
@@ -211,6 +217,8 @@ var USE_AUDIO = true;
 	}
 
 	UI.MinMaxSlider = function (localMin, localMax, absMin, absMax, properties) {
+
+		logMessage("Creating UI.MinMaxSlider");
 		Box.prototype.constructor.call(this, {
 			width: properties.width, height: properties.height,
 			position: properties.position,
@@ -222,8 +230,8 @@ var USE_AUDIO = true;
 			value: localMin, minValue: absMin, maxValue: absMax,
 			width: properties.width, height: properties.height,
 			position: properties.position,
-			backgroundAlpha: 0.0,
-		});
+			backgroundAlpha: 0.0
+		}));
 		this.maxSlider = new UI.Slider(withDefaults(properties, {
 			value: localMax, minValue: absMin, maxValue: absMax,
 			width: properties.width, height: properties.height,
@@ -272,15 +280,16 @@ var USE_AUDIO = true;
 			this.maxSlider.setValue(max);
 		}
 	}
-	UI.MinMaxSlider.prototype = new Box();
-	UI.MinMaxSlider.prototype.constructor = UI.MinMaxSlider;
-	UI.MinMaxSlider.prototype.toString = function () {
-		return "[ UI.MinMaxSlider " + this.id + " ]";
-	}
-	UI.MinMaxSlider.prototype.applyLayout = function () {
-		this.minSlider.setPosition(this.position.x, this.position.y);
-		this.maxSlider.setPosition(this.position.x, this.position.y);
-	}
+	// UI.MinMaxSlider.prototype = new UI.Box();
+	// UI.MinMaxSlider.prototype.constructor = UI.MinMaxSlider;
+	// UI.MinMaxSlider.prototype.toString = function () {
+	// 	return "[ UI.MinMaxSlider " + this.id + " ]";
+	// }
+	// UI.MinMaxSlider.prototype.applyLayout = function () {
+	// 	print("Calling UI.MinMaxSlider: " + this);
+	// 	this.minSlider.setPosition(this.position.x, this.position.y);
+	// 	this.maxSlider.setPosition(this.position.x, this.position.y);
+	// }
 })();
 
 // Controls UI
