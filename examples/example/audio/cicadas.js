@@ -9,12 +9,12 @@
 // See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 
-Script.include('../../libraries/uiwidgets.js');
+Script.include('http://public.highfidelity.io/scripts/libraries/uiwidgets.js');
 
 // Cicadas script
 (function () {
 
-var NUM_CICADAS = 200;
+var NUM_CICADAS = 20;
 var RADIUS = 10.0;
 var cicadaTimer = {
 	min: 1.0,
