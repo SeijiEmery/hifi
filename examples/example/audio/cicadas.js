@@ -99,7 +99,6 @@ var USE_AUDIO = true;
 			height: overlay.height
 		});
 	}
-
 	this.logMessage = function (text, color, alpha) {
 		lines[lineIndex].setVisible(true);
 		relayoutFrom(lineIndex);
@@ -115,40 +114,19 @@ var USE_AUDIO = true;
 		lineIndex = (lineIndex + 1) % lines.length;
 		UI.updateLayout();
 	}
-
-	// UI.debug.setVisible(true);
-	// this.teardownLog = function () {
-	// 	lines.forEach(function (textOverlay) {
-	// 		textOverlay.destroy();
-	// 	});
-	// 	overlay.destroy();
-	// }
-
 	var dragStart = null;
 	var initialPos = null;
 	overlay.addAction('onMouseDown', function (event) {
 		dragStart  = { x: event.x, y: event.y };
 		initialPos = { x: overlay.position.x, y: overlay.position.y };
 	});
-	// overlay.addAction('onMouseOver', function (event) {
-	// 	overlay.setPosition(overlay.position.x, overlay.position.y + 10);
-	// 	relayoutFrom(lineIndex);
-	// 	UI.updateLayout();
-	// });
 	overlay.addAction('onDragBegin', function () {});
 	overlay.addAction('onDragUpdate', function (event) {
-		print("Dragged");
 		overlay.setPosition(
 			initialPos.x + event.x - dragStart.x,
 			initialPos.y + event.y - dragStart.y);
 		relayoutFrom(lineIndex);
 		UI.updateLayout();
-		// lines.forEach(function(textOverlay) {
-		// 	textOverlay.update({
-		// 		x: textOverlay.position.x,
-		// 		y: textOverlay.position.y
-		// 	})
-		// })
 	});
 	overlay.addAction('onMouseUp', function () {
 		dragStart = initialPos = null;
@@ -209,7 +187,7 @@ var USE_AUDIO = true;
 
 // UI utils
 (function () {
-	this.makeDraggable = function(widget, target) {
+	var makeDraggable = this.makeDraggable = function(widget, target) {
 		target = widget || target;
 		if (widget) {
 			var dragStart = null;
@@ -231,12 +209,84 @@ var USE_AUDIO = true;
 			});
 		}
 	}
-})();
 
+	UI.MinMaxSlider = function (localMin, localMax, absMin, absMax, properties) {
+		Box.prototype.constructor.call(this, {
+			width: properties.width, height: properties.height,
+			position: properties.position,
+			backgroundColor: properties.backgroundColor,
+			backgroundAlpha: properties.backgroundAlpha,
+			visible: true
+		});
+		this.minSlider = new UI.Slider(withDefaults(properties, {
+			value: localMin, minValue: absMin, maxValue: absMax,
+			width: properties.width, height: properties.height,
+			position: properties.position,
+			backgroundAlpha: 0.0,
+		});
+		this.maxSlider = new UI.Slider(withDefaults(properties, {
+			value: localMax, minValue: absMin, maxValue: absMax,
+			width: properties.width, height: properties.height,
+			position: properties.position,
+			backgroundAlpha: 0.0
+		}));
+		this.onMinChanged = properties.onMinChanged || function () {};
+		this.onMaxChanged = properties.onMaxChanged || function () {};
+
+		function fwdAction(from, action, to) {
+			from.addAction(action, function (event, widget) {
+				to.actions[action].call(event, widget);
+			});
+		}
+		['onMouseDown', 'onMouseUp', 'onDragUpdate'].forEach(function (action) {
+			fwdAction(this.minSlider, action, this);
+			fwdAction(this.maxSlider, action, this);
+		});
+
+		this.minSlider.onValueChanged = function (value) {
+			this.onMinChanged(value);
+			if (value > this.maxSlider.getValue()) {
+				this.maxSlider.value = Math.min(value, absMax);
+				this.onMaxChanged(value);
+				UI.updateLayout();
+			}
+		}
+		this.maxSlider.onValueChanged = function (value) {
+			this.onMaxChanged(value);
+			if (value < this.minSlider.getValue()) {
+				this.minSlider.value = Math.max(value, absMin);
+				this.onMinChanged(value);
+				UI.updateLayout();
+			}
+		}
+		this.getMin = function () {
+			return this.minSlider.getMin();
+		}
+		this.getMax = function () {
+			return this.maxSlider.getMax();
+		}
+		this.setMin = function (value) {
+			this.minSlider.setValue(value);
+		}
+		this.setMax = function (value) {
+			this.maxSlider.setValue(max);
+		}
+	}
+	UI.MinMaxSlider.prototype = new Box();
+	UI.MinMaxSlider.prototype.constructor = UI.MinMaxSlider;
+	UI.MinMaxSlider.prototype.toString = function () {
+		return "[ UI.MinMaxSlider " + this.id + " ]";
+	}
+	UI.MinMaxSlider.prototype.applyLayout = function () {
+		this.minSlider.setPosition(this.position.x, this.position.y);
+		this.maxSlider.setPosition(this.position.x, this.position.y);
+	}
+})();
 
 // Controls UI
 (function () {
 	var layout = new UI.WidgetStack({ dir: '+y' });
+
 })();
 
 // Utils
