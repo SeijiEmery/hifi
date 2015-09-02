@@ -1017,8 +1017,10 @@ void EntityTreeRenderer::deletingEntity(const EntityItemID& entityID) {
 }
 
 void EntityTreeRenderer::addingEntity(const EntityItemID& entityID) {
+    _tree->lockForRead();
     checkAndCallPreload(entityID);
     auto entity = static_cast<EntityTree*>(_tree)->findEntityByID(entityID);
+    _tree->unlock();
     if (entity) {
         addEntityToScene(entity);
     }
