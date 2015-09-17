@@ -15,14 +15,10 @@
 #include <assert.h>
 
 #include <PerfStat.h>
-
-#include <gpu/Batch.h>
-#include <gpu/Context.h>
-#include <gpu/GPUConfig.h>
-#include <gpu/GPULogging.h>
-
 #include <ViewFrustum.h>
 #include <RenderArgs.h>
+
+#include <gpu/Context.h>
 
 #include "drawItemBounds_vert.h"
 #include "drawItemBounds_frag.h"
@@ -136,9 +132,7 @@ void DrawStatus::run(const SceneContextPointer& sceneContext, const RenderContex
     Transform viewMat;
     args->_viewFrustum->evalProjectionMatrix(projMat);
     args->_viewFrustum->evalViewTransform(viewMat);
-    if (args->_renderMode == RenderArgs::MIRROR_RENDER_MODE) {
-        viewMat.postScale(glm::vec3(-1.0f, 1.0f, 1.0f));
-    }
+
     batch.setProjectionTransform(projMat);
     batch.setViewTransform(viewMat);
     batch.setModelTransform(Transform());
@@ -152,23 +146,20 @@ void DrawStatus::run(const SceneContextPointer& sceneContext, const RenderContex
     const unsigned int VEC3_ADRESS_OFFSET = 3;
 
     for (int i = 0; i < nbItems; i++) {
-        batch._glUniform3fv(_drawItemBoundPosLoc, 1, (const GLfloat*) (itemAABox + i));
-        batch._glUniform3fv(_drawItemBoundDimLoc, 1, ((const GLfloat*) (itemAABox + i)) + VEC3_ADRESS_OFFSET);
+        batch._glUniform3fv(_drawItemBoundPosLoc, 1, (const float*) (itemAABox + i));
+        batch._glUniform3fv(_drawItemBoundDimLoc, 1, ((const float*) (itemAABox + i)) + VEC3_ADRESS_OFFSET);
 
         batch.draw(gpu::LINES, 24, 0);
     }
 
     batch.setPipeline(getDrawItemStatusPipeline());
     for (int i = 0; i < nbItems; i++) {
-        batch._glUniform3fv(_drawItemStatusPosLoc, 1, (const GLfloat*) (itemAABox + i));
-        batch._glUniform3fv(_drawItemStatusDimLoc, 1, ((const GLfloat*) (itemAABox + i)) + VEC3_ADRESS_OFFSET);
-        batch._glUniform4iv(_drawItemStatusValueLoc, 1, (const GLint*) (itemStatus + i));
+        batch._glUniform3fv(_drawItemStatusPosLoc, 1, (const float*) (itemAABox + i));
+        batch._glUniform3fv(_drawItemStatusDimLoc, 1, ((const float*) (itemAABox + i)) + VEC3_ADRESS_OFFSET);
+        batch._glUniform4iv(_drawItemStatusValueLoc, 1, (const int*) (itemStatus + i));
 
         batch.draw(gpu::TRIANGLES, 24, 0);
     }
 
-    // Before rendering the batch make sure we re in sync with gl state
-    args->_context->syncCache();
-    renderContext->args->_context->syncCache();
-    args->_context->render((batch));
+    args->_context->render(batch);
 }

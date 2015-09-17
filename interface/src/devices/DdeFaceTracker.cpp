@@ -236,29 +236,25 @@ void DdeFaceTracker::setEnabled(bool enabled) {
         cancelCalibration();
     }
 
-
     // isOpen() does not work as one might expect on QUdpSocket; don't test isOpen() before closing socket.
     _udpSocket.close();
-    if (enabled) {
-        _udpSocket.bind(_host, _serverPort);
-    }
 
+    // Terminate any existing DDE process, perhaps left running after an Interface crash.
+    // Do this even if !enabled in case user reset their settings after crash.
     const char* DDE_EXIT_COMMAND = "exit";
+    _udpSocket.bind(_host, _serverPort);
+    _udpSocket.writeDatagram(DDE_EXIT_COMMAND, DDE_SERVER_ADDR, _controlPort);
 
     if (enabled && !_ddeProcess) {
-        // Terminate any existing DDE process, perhaps left running after an Interface crash
-        _udpSocket.writeDatagram(DDE_EXIT_COMMAND, DDE_SERVER_ADDR, _controlPort);
         _ddeStopping = false;
-
         qCDebug(interfaceapp) << "DDE Face Tracker: Starting";
         _ddeProcess = new QProcess(qApp);
         connect(_ddeProcess, SIGNAL(finished(int, QProcess::ExitStatus)), SLOT(processFinished(int, QProcess::ExitStatus)));
         _ddeProcess->start(QCoreApplication::applicationDirPath() + DDE_PROGRAM_PATH, DDE_ARGUMENTS);
     }
-
+    
     if (!enabled && _ddeProcess) {
         _ddeStopping = true;
-        _udpSocket.writeDatagram(DDE_EXIT_COMMAND, DDE_SERVER_ADDR, _controlPort);
         qCDebug(interfaceapp) << "DDE Face Tracker: Stopping";
     }
 #endif
@@ -562,6 +558,13 @@ void DdeFaceTracker::decodePacket(const QByteArray& buffer) {
 
             eyeCoefficients[0] = _filteredEyeBlinks[0];
             eyeCoefficients[1] = _filteredEyeBlinks[1];
+        }
+
+        // Couple eyelid values if configured - use the most "open" value for both
+        if (Menu::getInstance()->isOptionChecked(MenuOption::CoupleEyelids)) {
+            float eyeCoefficient = std::min(eyeCoefficients[0], eyeCoefficients[1]);
+            eyeCoefficients[0] = eyeCoefficient;
+            eyeCoefficients[1] = eyeCoefficient;
         }
 
         // Use EyeBlink values to control both EyeBlink and EyeOpen

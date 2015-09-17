@@ -96,14 +96,11 @@ AudioMixer::AudioMixer(NLPacket& packet) :
     // SOON
 
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
-    
-    QSet<PacketType::Value> nodeAudioPackets {
-        PacketType::MicrophoneAudioNoEcho, PacketType::MicrophoneAudioWithEcho,
-        PacketType::InjectAudio, PacketType::SilentAudioFrame,
-        PacketType::AudioStreamStats
-    };
 
-    packetReceiver.registerListenerForTypes(nodeAudioPackets, this, "handleNodeAudioPacket");
+    packetReceiver.registerListenerForTypes({ PacketType::MicrophoneAudioNoEcho, PacketType::MicrophoneAudioWithEcho,
+                                              PacketType::InjectAudio, PacketType::SilentAudioFrame,
+                                              PacketType::AudioStreamStats },
+                                            this, "handleNodeAudioPacket");
     packetReceiver.registerListener(PacketType::MuteEnvironment, this, "handleMuteEnvironmentPacket");
 }
 
@@ -652,9 +649,6 @@ void AudioMixer::run() {
 
     auto nodeList = DependencyManager::get<NodeList>();
 
-    // we do not want this event loop to be the handler for UDP datagrams, so disconnect
-    disconnect(&nodeList->getNodeSocket(), 0, this, 0);
-
     nodeList->addNodeTypeToInterestSet(NodeType::Agent);
 
     nodeList->linkedDataCreateCallback = [](Node* node) {
@@ -672,7 +666,7 @@ void AudioMixer::run() {
     connect(&domainHandler, &DomainHandler::settingsReceiveFail, &loop, &QEventLoop::quit);
     domainHandler.requestDomainSettings();
     loop.exec();
-
+    
     if (domainHandler.getSettingsObject().isEmpty()) {
         qDebug() << "Failed to retreive settings object from domain-server. Bailing on assignment.";
         setFinished(true);
@@ -927,9 +921,9 @@ void AudioMixer::parseSettingsObject(const QJsonObject &settingsObject) {
         const QString USE_STDEV_FOR_DESIRED_CALC_JSON_KEY = "use_stdev_for_desired_calc";
         _streamSettings._useStDevForJitterCalc = audioBufferGroupObject[USE_STDEV_FOR_DESIRED_CALC_JSON_KEY].toBool();
         if (_streamSettings._useStDevForJitterCalc) {
-            qDebug() << "Using Philip's stdev method for jitter calc if dynamic jitter buffers enabled";
+            qDebug() << "Using stdev method for jitter calc if dynamic jitter buffers enabled";
         } else {
-            qDebug() << "Using Fred's max-gap method for jitter calc if dynamic jitter buffers enabled";
+            qDebug() << "Using max-gap method for jitter calc if dynamic jitter buffers enabled";
         }
 
         const QString WINDOW_STARVE_THRESHOLD_JSON_KEY = "window_starve_threshold";

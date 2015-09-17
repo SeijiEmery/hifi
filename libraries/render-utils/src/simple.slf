@@ -13,14 +13,44 @@
 //
 
 <@include DeferredBufferWrite.slh@>
+<@include model/Material.slh@>
 
 // the interpolated normal
-varying vec4 interpolatedNormal;
+in vec3 _normal;
+in vec3 _color;
+in vec2 _texCoord0;
+in vec4 _position;
 
+//PROCEDURAL_COMMON_BLOCK
+
+#line 1001
+//PROCEDURAL_BLOCK
+
+#line 2030
 void main(void) {
-    packDeferredFragment(
-        normalize(interpolatedNormal.xyz), 
-        glowIntensity,
-        gl_Color.rgb,
-         DEFAULT_SPECULAR, DEFAULT_SHININESS);
+    Material material = getMaterial();
+    vec3 normal = normalize(_normal.xyz); 
+    vec3 diffuse = _color.rgb; 
+    vec3 specular = DEFAULT_SPECULAR;
+    float shininess = DEFAULT_SHININESS;
+    float emissiveAmount = 0.0;
+    
+#ifdef PROCEDURAL
+
+#ifdef PROCEDURAL_V1
+    specular = getProceduralColor().rgb;
+    emissiveAmount = 1.0;
+#else 
+    emissiveAmount = getProceduralColors(diffuse, specular, shininess);
+#endif
+
+#endif
+
+    if (emissiveAmount > 0.0) {
+        packDeferredFragmentLightmap(
+            normal, glowIntensity, diffuse, specular, shininess, specular);
+    } else {
+        packDeferredFragment(
+            normal, glowIntensity, diffuse, specular, shininess);
+    }
 }

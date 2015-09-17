@@ -9,13 +9,15 @@
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 
+#include "BulletUtilTests.h"
+
 #include <iostream>
 
-//#include "PhysicsTestUtil.h"
 #include <BulletUtil.h>
 #include <NumericalConstants.h>
 
-#include "BulletUtilTests.h"
+// Add additional qtest functionality (the include order is important!)
+#include "../QTestExtensions.h"
 
 // Constants
 const glm::vec3 origin(0.0f);

@@ -35,6 +35,7 @@
 #include "Menu.h"
 #include "MyAvatar.h"
 #include "SceneScriptingInterface.h"
+#include "AvatarRig.h"
 
 // 70 times per second - target is 60hz, but this helps account for any small deviations
 // in the update loop
@@ -65,7 +66,7 @@ AvatarManager::AvatarManager(QObject* parent) :
 {
     // register a meta type for the weak pointer we'll use for the owning avatar mixer for each avatar
     qRegisterMetaType<QWeakPointer<Node> >("NodeWeakPointer");
-    _myAvatar = std::make_shared<MyAvatar>();
+    _myAvatar = std::make_shared<MyAvatar>(std::make_shared<AvatarRig>());
 
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
     packetReceiver.registerListener(PacketType::BulkAvatarData, this, "processAvatarDataPacket");
@@ -128,7 +129,9 @@ void AvatarManager::updateOtherAvatars(float deltaTime) {
             _avatarFades.push_back(avatarIterator.value());
             avatarIterator = _avatarHash.erase(avatarIterator);
         } else {
+            avatar->startUpdate();
             avatar->simulate(deltaTime);
+            avatar->endUpdate();
             ++avatarIterator;
         }
     }
@@ -147,6 +150,7 @@ void AvatarManager::simulateAvatarFades(float deltaTime) {
     render::PendingChanges pendingChanges;
     while (fadingIterator != _avatarFades.end()) {
         auto avatar = std::static_pointer_cast<Avatar>(*fadingIterator);
+        avatar->startUpdate();
         avatar->setTargetScale(avatar->getScale() * SHRINK_RATE, true);
         if (avatar->getTargetScale() < MIN_FADE_SCALE) {
             avatar->removeFromScene(*fadingIterator, scene, pendingChanges);
@@ -155,12 +159,13 @@ void AvatarManager::simulateAvatarFades(float deltaTime) {
             avatar->simulate(deltaTime);
             ++fadingIterator;
         }
+        avatar->endUpdate();
     }
     scene->enqueuePendingChanges(pendingChanges);
 }
 
 AvatarSharedPointer AvatarManager::newSharedAvatar() {
-    return AvatarSharedPointer(std::make_shared<Avatar>());
+    return AvatarSharedPointer(std::make_shared<Avatar>(std::make_shared<AvatarRig>()));
 }
 
 // virtual
@@ -178,11 +183,11 @@ AvatarSharedPointer AvatarManager::addAvatar(const QUuid& sessionUUID, const QWe
 // protected
 void AvatarManager::removeAvatarMotionState(AvatarSharedPointer avatar) {
     auto rawPointer = std::static_pointer_cast<Avatar>(avatar);
-    AvatarMotionState* motionState= rawPointer->_motionState;
+    AvatarMotionState* motionState = rawPointer->getMotionState();
     if (motionState) {
         // clean up physics stuff
         motionState->clearObjectBackPointer();
-        rawPointer->_motionState = nullptr;
+        rawPointer->setMotionState(nullptr);
         _avatarMotionStates.remove(motionState);
         _motionStatesToAdd.remove(motionState);
         _motionStatesToDelete.push_back(motionState);
@@ -237,37 +242,33 @@ QVector<AvatarManager::LocalLight> AvatarManager::getLocalLights() const {
     return _localLights;
 }
 
-VectorOfMotionStates& AvatarManager::getObjectsToDelete() {
-    _tempMotionStates.clear();
-    _tempMotionStates.swap(_motionStatesToDelete);
-    return _tempMotionStates;
+void AvatarManager::getObjectsToDelete(VectorOfMotionStates& result) {
+    result.clear();
+    result.swap(_motionStatesToDelete);
 }
 
-VectorOfMotionStates& AvatarManager::getObjectsToAdd() {
-    _tempMotionStates.clear();
-
+void AvatarManager::getObjectsToAdd(VectorOfMotionStates& result) {
+    result.clear();
     for (auto motionState : _motionStatesToAdd) {
-        _tempMotionStates.push_back(motionState);
+        result.push_back(motionState);
     }
     _motionStatesToAdd.clear();
-    return _tempMotionStates;
 }
 
-VectorOfMotionStates& AvatarManager::getObjectsToChange() {
-    _tempMotionStates.clear();
+void AvatarManager::getObjectsToChange(VectorOfMotionStates& result) {
+    result.clear();
     for (auto state : _avatarMotionStates) {
         if (state->_dirtyFlags > 0) {
-            _tempMotionStates.push_back(state);
+            result.push_back(state);
         }
     }
-    return _tempMotionStates;
 }
 
-void AvatarManager::handleOutgoingChanges(VectorOfMotionStates& motionStates) {
+void AvatarManager::handleOutgoingChanges(const VectorOfMotionStates& motionStates) {
     // TODO: extract the MyAvatar results once we use a MotionState for it.
 }
 
-void AvatarManager::handleCollisionEvents(CollisionEvents& collisionEvents) {
+void AvatarManager::handleCollisionEvents(const CollisionEvents& collisionEvents) {
     for (Collision collision : collisionEvents) {
         // TODO: Current physics uses null idA or idB for non-entities. The plan is to handle MOTIONSTATE_TYPE_AVATAR,
         // and then MOTIONSTATE_TYPE_MYAVATAR. As it is, this code only covers the case of my avatar (in which case one
@@ -278,7 +279,7 @@ void AvatarManager::handleCollisionEvents(CollisionEvents& collisionEvents) {
             const QString& collisionSoundURL = myAvatar->getCollisionSoundURL();
             if (!collisionSoundURL.isEmpty()) {
                 const float velocityChange = glm::length(collision.velocityChange);
-                const float MIN_AVATAR_COLLISION_ACCELERATION = 0.01;
+                const float MIN_AVATAR_COLLISION_ACCELERATION = 0.01f;
                 const bool isSound = (collision.type == CONTACT_EVENT_TYPE_START) && (velocityChange > MIN_AVATAR_COLLISION_ACCELERATION);
 
                 if (!isSound) {
@@ -306,7 +307,7 @@ void AvatarManager::updateAvatarPhysicsShape(const QUuid& id) {
     AvatarHash::iterator avatarItr = _avatarHash.find(id);
     if (avatarItr != _avatarHash.end()) {
         auto avatar = std::static_pointer_cast<Avatar>(avatarItr.value());
-        AvatarMotionState* motionState = avatar->_motionState;
+        AvatarMotionState* motionState = avatar->getMotionState();
         if (motionState) {
             motionState->addDirtyFlags(EntityItem::DIRTY_SHAPE);
         } else {
@@ -315,7 +316,7 @@ void AvatarManager::updateAvatarPhysicsShape(const QUuid& id) {
             btCollisionShape* shape = ObjectMotionState::getShapeManager()->getShape(shapeInfo);
             if (shape) {
                 AvatarMotionState* motionState = new AvatarMotionState(avatar.get(), shape);
-                avatar->_motionState = motionState;
+                avatar->setMotionState(motionState);
                 _motionStatesToAdd.insert(motionState);
                 _avatarMotionStates.insert(motionState);
             }

@@ -26,7 +26,7 @@
         ProfileRange(const char *name);
         ~ProfileRange();
     };
-    #define PROFILE_RANGE(name) ProfileRange profileRangeThis(name);
+#define PROFILE_RANGE(name) ProfileRange profileRangeThis(name);
 #else
 #define PROFILE_RANGE(name)
 #endif
@@ -47,6 +47,19 @@ public:
     ~Batch();
 
     void clear();
+    
+    // Batches may need to override the context level stereo settings
+    // if they're performing framebuffer copy operations, like the 
+    // deferred lighting resolution mechanism
+    void enableStereo(bool enable = true);
+    bool isStereoEnabled() const;
+
+    // Stereo batches will pre-translate the view matrix, but this isn't 
+    // appropriate for skyboxes or other things intended to be drawn at 
+    // infinite distance, so provide a mechanism to render in stereo 
+    // without the pre-translation of the view.  
+    void enableSkybox(bool enable = true);
+    bool isSkyboxEnabled() const;
 
     // Drawcalls
     void draw(Primitive primitiveType, uint32 numVertices, uint32 startVertex = 0);
@@ -94,7 +107,7 @@ public:
     void setResourceTexture(uint32 slot, const TexturePointer& view);
     void setResourceTexture(uint32 slot, const TextureView& view); // not a command, just a shortcut from a TextureView
 
-    // Framebuffer Stage
+    // Ouput Stage
     void setFramebuffer(const FramebufferPointer& framebuffer);
  
     // Clear framebuffer layers
@@ -106,12 +119,18 @@ public:
     void clearStencilFramebuffer(int stencil, bool enableScissor = false); // not a command, just a shortcut for clearFramebuffer, it touches only stencil target
     void clearDepthStencilFramebuffer(float depth, int stencil, bool enableScissor = false); // not a command, just a shortcut for clearFramebuffer, it touches depth and stencil target
 
-    void blit(const FramebufferPointer& src, const Vec4i& srcViewport, const FramebufferPointer& dst, const Vec4i& dstViewport);
+    // Blit src framebuffer to destination
+    // the srcRect and dstRect are the rect region in source and destination framebuffers expressed in pixel space
+    // with xy and zw the bounding corners of the rect region.
+    void blit(const FramebufferPointer& src, const Vec4i& srcRect, const FramebufferPointer& dst, const Vec4i& dstRect);
 
     // Query Section
     void beginQuery(const QueryPointer& query);
     void endQuery(const QueryPointer& query);
     void getQuery(const QueryPointer& query);
+
+    // Reset the stage caches and states
+    void resetStages();
 
     // TODO: As long as we have gl calls explicitely issued from interface
     // code, we need to be able to record and batch these calls. THe long 
@@ -119,42 +138,19 @@ public:
     // For now, instead of calling the raw gl Call, use the equivalent call on the batch so the call is beeing recorded
     // THe implementation of these functions is in GLBackend.cpp
 
-    void _glEnable(unsigned int cap);
-    void _glDisable(unsigned int cap);
+    void _glActiveBindTexture(unsigned int unit, unsigned int target, unsigned int texture);
 
-    void _glEnableClientState(unsigned int array);
-    void _glDisableClientState(unsigned int array);
-
-    void _glCullFace(unsigned int mode);
-    void _glAlphaFunc(unsigned int func, float ref);
-
-    void _glDepthFunc(unsigned int func);
-    void _glDepthMask(unsigned char flag);
-    void _glDepthRange(float  zNear, float  zFar);
-
-    void _glBindBuffer(unsigned int target, unsigned int buffer);
-
-    void _glBindTexture(unsigned int target, unsigned int texture);
-    void _glActiveTexture(unsigned int texture);
-    void _glTexParameteri(unsigned int target, unsigned int pname, int param);
-    
-    void _glDrawBuffers(int n, const unsigned int* bufs);
-
-    void _glUseProgram(unsigned int program);
     void _glUniform1i(int location, int v0);
     void _glUniform1f(int location, float v0);
     void _glUniform2f(int location, float v0, float v1);
     void _glUniform3f(int location, float v0, float v1, float v2);
+    void _glUniform4f(int location, float v0, float v1, float v2, float v3);
     void _glUniform3fv(int location, int count, const float* value);
     void _glUniform4fv(int location, int count, const float* value);
     void _glUniform4iv(int location, int count, const int* value);
     void _glUniformMatrix4fv(int location, int count, unsigned char transpose, const float* value);
 
-    void _glEnableVertexAttribArray(int location);
-    void _glDisableVertexAttribArray(int location);
-
     void _glColor4f(float red, float green, float blue, float alpha);
-    void _glLineWidth(float width);
 
     enum Command {
         COMMAND_draw = 0,
@@ -186,45 +182,24 @@ public:
         COMMAND_endQuery,
         COMMAND_getQuery,
 
+        COMMAND_resetStages,
+
         // TODO: As long as we have gl calls explicitely issued from interface
         // code, we need to be able to record and batch these calls. THe long 
         // term strategy is to get rid of any GL calls in favor of the HIFI GPU API
-        COMMAND_glEnable,
-        COMMAND_glDisable,
+        COMMAND_glActiveBindTexture,
 
-        COMMAND_glEnableClientState,
-        COMMAND_glDisableClientState,
-
-        COMMAND_glCullFace,
-        COMMAND_glAlphaFunc,
-
-        COMMAND_glDepthFunc,
-        COMMAND_glDepthMask,
-        COMMAND_glDepthRange,
-
-        COMMAND_glBindBuffer,
-
-        COMMAND_glBindTexture,
-        COMMAND_glActiveTexture,
-        COMMAND_glTexParameteri,
-
-        COMMAND_glDrawBuffers,
-
-        COMMAND_glUseProgram,
         COMMAND_glUniform1i,
         COMMAND_glUniform1f,
         COMMAND_glUniform2f,
         COMMAND_glUniform3f,
+        COMMAND_glUniform4f,
         COMMAND_glUniform3fv,
         COMMAND_glUniform4fv,
         COMMAND_glUniform4iv,
         COMMAND_glUniformMatrix4fv,
 
-        COMMAND_glEnableVertexAttribArray,
-        COMMAND_glDisableVertexAttribArray,
-
         COMMAND_glColor4f,
-        COMMAND_glLineWidth,
 
         NUM_COMMANDS,
     };
@@ -315,6 +290,9 @@ public:
     PipelineCaches _pipelines;
     FramebufferCaches _framebuffers;
     QueryCaches _queries;
+
+    bool _enableStereo{ true };
+    bool _enableSkybox{ false };
 
 protected:
 };

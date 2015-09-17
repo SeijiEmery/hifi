@@ -418,9 +418,17 @@ soxr_error_t possibleResampling(soxr_t resampler,
                                         numSourceSamples,
                                         sourceAudioFormat, destinationAudioFormat);
 
+                size_t numDestinationSamplesActual = 0;
                 resampleError = soxr_process(resampler,
                                              channelConversionSamples, numChannelCoversionSamples, NULL,
-                                             destinationSamples, numDestinationSamples, NULL);
+                                             destinationSamples, numDestinationSamples, &numDestinationSamplesActual);
+
+                // return silence instead of playing garbage samples
+                if (numDestinationSamplesActual < numDestinationSamples) {
+                    unsigned int nBytes = (numDestinationSamples - numDestinationSamplesActual) * destinationAudioFormat.channelCount() * sizeof(int16_t);
+                    memset(&destinationSamples[numDestinationSamplesActual * destinationAudioFormat.channelCount()], 0, nBytes);
+                    qCDebug(audioclient) << "SOXR:  padded with" << nBytes << "bytes of silence";
+                }
 
                 delete[] channelConversionSamples;
             } else {
@@ -433,9 +441,17 @@ soxr_error_t possibleResampling(soxr_t resampler,
                     numAdjustedDestinationSamples /= 2;
                 }
 
+                size_t numAdjustedDestinationSamplesActual = 0;
                 resampleError = soxr_process(resampler,
                                              sourceSamples, numAdjustedSourceSamples, NULL,
-                                             destinationSamples, numAdjustedDestinationSamples, NULL);
+                                             destinationSamples, numAdjustedDestinationSamples, &numAdjustedDestinationSamplesActual);
+
+                // return silence instead of playing garbage samples
+                if (numAdjustedDestinationSamplesActual < numAdjustedDestinationSamples) {
+                    unsigned int nBytes = (numAdjustedDestinationSamples - numAdjustedDestinationSamplesActual) * destinationAudioFormat.channelCount() * sizeof(int16_t);
+                    memset(&destinationSamples[numAdjustedDestinationSamplesActual * destinationAudioFormat.channelCount()], 0, nBytes);
+                    qCDebug(audioclient) << "SOXR:  padded with" << nBytes << "bytes of silence";
+                }
             }
 
             return resampleError;
@@ -1037,9 +1053,14 @@ bool AudioClient::outputLocalInjector(bool isStereo, AudioInjector* injector) {
         localOutput->moveToThread(injector->getLocalBuffer()->thread());
 
         // have it be stopped when that local buffer is about to close
-        connect(localOutput, &QAudioOutput::stateChanged, this, &AudioClient::audioStateChanged);
-        connect(this, &AudioClient::audioFinished, localOutput, &QAudioOutput::stop);
-        connect(this, &AudioClient::audioFinished, injector, &AudioInjector::stop);
+        // We don't want to stop this localOutput and injector whenever this AudioClient singleton goes idle,
+        // only when the localOutput does. But the connection is to localOutput, so that it happens on the right thread.
+        connect(localOutput, &QAudioOutput::stateChanged, localOutput, [=](QAudio::State state) {
+            if (state == QAudio::IdleState) {
+                localOutput->stop();
+                injector->stop();
+            }
+        });
 
         connect(injector->getLocalBuffer(), &QIODevice::aboutToClose, localOutput, &QAudioOutput::stop);
 
@@ -1357,10 +1378,4 @@ void AudioClient::saveSettings() {
                                                     getWindowSecondsForDesiredCalcOnTooManyStarves());
     windowSecondsForDesiredReduction.set(_receivedAudioStream.getWindowSecondsForDesiredReduction());
     repetitionWithFade.set(_receivedAudioStream.getRepetitionWithFade());
-}
-
-void AudioClient::audioStateChanged(QAudio::State state) {
-    if (state == QAudio::IdleState) {
-        emit audioFinished();
-    }
 }
