@@ -131,9 +131,10 @@ namespace MenuOption {
     const QString AboutApp = "About Interface";
     const QString AddRemoveFriends = "Add/Remove Friends...";
     const QString AddressBar = "Show Address Bar";
-    const QString AlignForearmsWithWrists = "Align Forearms with Wrists";
-    const QString AlternateIK = "Alternate IK";
     const QString Animations = "Animations...";
+    const QString AnimDebugDrawAnimPose = "Debug Draw Animation";
+    const QString AnimDebugDrawBindPose = "Debug Draw Bind Pose";
+    const QString Antialiasing = "Antialiasing";
     const QString Atmosphere = "Atmosphere";
     const QString Attachments = "Attachments...";
     const QString AudioNoiseReduction = "Audio Noise Reduction";
@@ -174,7 +175,6 @@ namespace MenuOption {
     const QString DisableNackPackets = "Disable Entity NACK Packets";
     const QString DiskCacheEditor = "Disk Cache Editor";
     const QString DisplayCrashOptions = "Display Crash Options";
-    const QString DisplayHands = "Show Hand Info";
     const QString DisplayHandTargets = "Show Hand Targets";
     const QString DisplayModelBounds = "Display Model Bounds";
     const QString DisplayModelTriangles = "Display Model Triangles";
@@ -187,6 +187,8 @@ namespace MenuOption {
     const QString EchoServerAudio = "Echo Server Audio";
     const QString EditEntitiesHelp = "Edit Entities Help...";
     const QString Enable3DTVMode = "Enable 3DTV Mode";
+    const QString EnableAvatarUpdateThreading = "Enable Avatar Update Threading";
+    const QString EnableAnimGraph = "Enable Anim Graph";
     const QString EnableCharacterController = "Enable avatar collisions";
     const QString EnableRigAnimations = "Enable Rig Animations";
     const QString ExpandMyAvatarSimulateTiming = "Expand /myAvatar/simulation";
@@ -216,6 +218,7 @@ namespace MenuOption {
     const QString Log = "Log";
     const QString LogExtraTimings = "Log Extra Timing Details";
     const QString LowVelocityFilter = "Low Velocity Filter";
+    const QString MeshVisible = "Draw Mesh";
     const QString Mirror = "Mirror";
     const QString MuteAudio = "Mute Microphone";
     const QString MuteEnvironment = "Mute Environment";
@@ -284,6 +287,7 @@ namespace MenuOption {
     const QString ToolWindow = "Tool Window";
     const QString TransmitterDrive = "Transmitter Drive";
     const QString TurnWithHead = "Turn using Head";
+    const QString UploadAsset = "Upload File to Asset Server";
     const QString UseAudioForMouth = "Use Audio for Mouth";
     const QString UseCamera = "Use Camera";
     const QString VelocityFilter = "Velocity Filter";

@@ -39,7 +39,8 @@ class DomainServer : public QCoreApplication, public HTTPSRequestHandler {
     Q_OBJECT
 public:
     DomainServer(int argc, char* argv[]);
-
+    ~DomainServer();
+    
     static int const EXIT_CODE_REBOOT;
 
     bool handleHTTPRequest(HTTPConnection* connection, const QUrl& url, bool skipSubHandler = false);
@@ -57,7 +58,7 @@ public slots:
 
     void processRequestAssignmentPacket(QSharedPointer<NLPacket> packet);
     void processListRequestPacket(QSharedPointer<NLPacket> packet, SharedNodePointer sendingNode);
-    void processNodeJSONStatsPacket(QSharedPointer<NLPacket> packet, SharedNodePointer sendingNode);
+    void processNodeJSONStatsPacket(QSharedPointer<NLPacketList> packetList, SharedNodePointer sendingNode);
     void processPathQueryPacket(QSharedPointer<NLPacket> packet);
 
 private slots:

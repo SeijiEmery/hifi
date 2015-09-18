@@ -25,7 +25,6 @@
 #include <ApplicationVersion.h>
 #include <HifiConfigVariantMap.h>
 #include <HTTPConnection.h>
-#include <JSONBreakableMarshal.h>
 #include <LogUtils.h>
 #include <NetworkingConstants.h>
 #include <udt/PacketHeaders.h>
@@ -106,6 +105,11 @@ DomainServer::DomainServer(int argc, char* argv[]) :
         // preload some user public keys so they can connect on first request
         _gatekeeper.preloadAllowedUserPublicKeys();
     }
+}
+
+DomainServer::~DomainServer() {
+    // destroy the LimitedNodeList before the DomainServer QCoreApplication is down
+    DependencyManager::destroy<LimitedNodeList>();
 }
 
 void DomainServer::aboutToQuit() {
@@ -257,7 +261,7 @@ void DomainServer::setupNodeListAndAssignments(const QUuid& sessionUUID) {
     auto nodeList = DependencyManager::set<LimitedNodeList>(domainServerPort, domainServerDTLSPort);
 
     // no matter the local port, save it to shared mem so that local assignment clients can ask what it is
-    nodeList->putLocalPortIntoSharedMemory(DOMAIN_SERVER_LOCAL_PORT_SMEM_KEY, this, nodeList->getNodeSocket().localPort());
+    nodeList->putLocalPortIntoSharedMemory(DOMAIN_SERVER_LOCAL_PORT_SMEM_KEY, this, nodeList->getSocketLocalPort());
 
     // store our local http ports in shared memory
     quint16 localHttpPort = DOMAIN_SERVER_HTTP_PORT;
@@ -280,10 +284,15 @@ void DomainServer::setupNodeListAndAssignments(const QUuid& sessionUUID) {
     // register as the packet receiver for the types we want
     PacketReceiver& packetReceiver = nodeList->getPacketReceiver();
     packetReceiver.registerListener(PacketType::RequestAssignment, this, "processRequestAssignmentPacket");
-    packetReceiver.registerListener(PacketType::DomainConnectRequest, &_gatekeeper, "processConnectRequestPacket");
     packetReceiver.registerListener(PacketType::DomainListRequest, this, "processListRequestPacket");
     packetReceiver.registerListener(PacketType::DomainServerPathQuery, this, "processPathQueryPacket");
-    packetReceiver.registerListener(PacketType::NodeJsonStats, this, "processNodeJSONStatsPacket");
+    packetReceiver.registerMessageListener(PacketType::NodeJsonStats, this, "processNodeJSONStatsPacket");
+    
+    // NodeList won't be available to the settings manager when it is created, so call registerListener here
+    packetReceiver.registerListener(PacketType::DomainSettingsRequest, &_settingsManager, "processSettingsRequestPacket");
+    
+    // register the gatekeeper for the packets it needs to receive
+    packetReceiver.registerListener(PacketType::DomainConnectRequest, &_gatekeeper, "processConnectRequestPacket");
     packetReceiver.registerListener(PacketType::ICEPing, &_gatekeeper, "processICEPingPacket");
     packetReceiver.registerListener(PacketType::ICEPingReply, &_gatekeeper, "processICEPingReplyPacket");
     packetReceiver.registerListener(PacketType::ICEServerPeerInformation, &_gatekeeper, "processICEPeerInformationPacket");
@@ -561,8 +570,19 @@ void DomainServer::populateDefaultStaticAssignmentsExcludingTypes(const QSet<Ass
         if (!excludedTypes.contains(defaultedType)
             && defaultedType != Assignment::UNUSED_0
             && defaultedType != Assignment::UNUSED_1
-            && defaultedType != Assignment::UNUSED_2
             && defaultedType != Assignment::AgentType) {
+            
+            if (defaultedType == Assignment::AssetServerType) {
+                // Make sure the asset-server is enabled before adding it here.
+                // Initially we do not assign it by default so we can test it in HF domains first
+                static const QString ASSET_SERVER_ENABLED_KEYPATH = "asset_server.enabled";
+                
+                if (!_settingsManager.valueOrDefaultValueForKeyPath(ASSET_SERVER_ENABLED_KEYPATH).toBool()) {
+                    // skip to the next iteration if asset-server isn't enabled
+                    continue;
+                }
+            }
+            
             // type has not been set from a command line or config file config, use the default
             // by clearing whatever exists and writing a single default assignment with no payload
             Assignment* newAssignment = new Assignment(Assignment::CreateCommand, (Assignment::Type) defaultedType);
@@ -658,10 +678,10 @@ void DomainServer::sendDomainListToNode(const SharedNodePointer& node, const Hif
     extendedHeaderStream << (quint8) node->getCanAdjustLocks();
     extendedHeaderStream << (quint8) node->getCanRez();
 
-    NLPacketList domainListPackets(PacketType::DomainList, extendedHeader);
+    auto domainListPackets = NLPacketList::create(PacketType::DomainList, extendedHeader);
 
     // always send the node their own UUID back
-    QDataStream domainListStream(&domainListPackets);
+    QDataStream domainListStream(domainListPackets.get());
 
     DomainServerNodeData* nodeData = reinterpret_cast<DomainServerNodeData*>(node->getLinkedData());
 
@@ -677,7 +697,7 @@ void DomainServer::sendDomainListToNode(const SharedNodePointer& node, const Hif
                 if (otherNode->getUUID() != node->getUUID() && nodeInterestSet.contains(otherNode->getType())) {
                     
                     // since we're about to add a node to the packet we start a segment
-                    domainListPackets.startSegment();
+                    domainListPackets->startSegment();
 
                     // don't send avatar nodes to other avatars, that will come from avatar mixer
                     domainListStream << *otherNode.data();
@@ -686,17 +706,17 @@ void DomainServer::sendDomainListToNode(const SharedNodePointer& node, const Hif
                     domainListStream << connectionSecretForNodes(node, otherNode);
 
                     // we've added the node we wanted so end the segment now
-                    domainListPackets.endSegment();
+                    domainListPackets->endSegment();
                 }
             });
         }
     }
     
     // send an empty list to the node, in case there were no other nodes
-    domainListPackets.closeCurrentPacket(true);
+    domainListPackets->closeCurrentPacket(true);
 
     // write the PacketList to this node
-    limitedNodeList->sendPacketList(domainListPackets, *node);
+    limitedNodeList->sendPacketList(std::move(domainListPackets), *node);
 }
 
 QUuid DomainServer::connectionSecretForNodes(const SharedNodePointer& nodeA, const SharedNodePointer& nodeB) {
@@ -986,10 +1006,10 @@ void DomainServer::sendHeartbeatToIceServer() {
     DependencyManager::get<LimitedNodeList>()->sendHeartbeatToIceServer(_iceServerSocket);
 }
 
-void DomainServer::processNodeJSONStatsPacket(QSharedPointer<NLPacket> packet, SharedNodePointer sendingNode) {
+void DomainServer::processNodeJSONStatsPacket(QSharedPointer<NLPacketList> packetList, SharedNodePointer sendingNode) {
     auto nodeData = dynamic_cast<DomainServerNodeData*>(sendingNode->getLinkedData());
     if (nodeData) {
-        nodeData->processJSONStatsPacket(*packet);
+        nodeData->updateJSONStats(packetList->getMessage());
     }
 }
 
@@ -1655,9 +1675,9 @@ void DomainServer::nodeKilled(SharedNodePointer node) {
             }
         }
 
-        // If this node was an Agent ask JSONBreakableMarshal to potentially remove the interpolation we stored
-        JSONBreakableMarshal::removeInterpolationForKey(USERNAME_UUID_REPLACEMENT_STATS_KEY,
-                uuidStringWithoutCurlyBraces(node->getUUID()));
+        // If this node was an Agent ask DomainServerNodeData to potentially remove the interpolation we stored
+        nodeData->removeOverrideForKey(USERNAME_UUID_REPLACEMENT_STATS_KEY,
+                                       uuidStringWithoutCurlyBraces(node->getUUID()));
 
         // cleanup the connection secrets that we set up for this node (on the other nodes)
         foreach (const QUuid& otherNodeSessionUUID, nodeData->getSessionSecretHash().keys()) {

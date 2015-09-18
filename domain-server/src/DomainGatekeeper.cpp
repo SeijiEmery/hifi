@@ -17,7 +17,6 @@
 
 #include <AccountManager.h>
 #include <Assignment.h>
-#include <JSONBreakableMarshal.h>
 
 #include "DomainServer.h"
 #include "DomainServerNodeData.h"
@@ -48,7 +47,8 @@ QUuid DomainGatekeeper::assignmentUUIDForPendingAssignment(const QUuid& tempUUID
 }
 
 const NodeSet STATICALLY_ASSIGNED_NODES = NodeSet() << NodeType::AudioMixer
-    << NodeType::AvatarMixer << NodeType::EntityServer;
+    << NodeType::AvatarMixer << NodeType::EntityServer
+    << NodeType::AssetServer;
 
 void DomainGatekeeper::processConnectRequestPacket(QSharedPointer<NLPacket> packet) {
     if (packet->getPayloadSize() == 0) {
@@ -62,6 +62,16 @@ void DomainGatekeeper::processConnectRequestPacket(QSharedPointer<NLPacket> pack
     
     if (nodeConnection.localSockAddr.isNull() || nodeConnection.publicSockAddr.isNull()) {
         qDebug() << "Unexpected data received for node local socket or public socket. Will not allow connection.";
+        return;
+    }
+    
+    static const NodeSet VALID_NODE_TYPES {
+        NodeType::AudioMixer, NodeType::AvatarMixer, NodeType::AssetServer, NodeType::EntityServer, NodeType::Agent
+    };
+    
+    if (!VALID_NODE_TYPES.contains(nodeConnection.nodeType)) {
+        qDebug() << "Received an invalid node type with connect request. Will not allow connection from"
+            << nodeConnection.senderSockAddr;
         return;
     }
     
@@ -261,9 +271,9 @@ SharedNodePointer DomainGatekeeper::processAgentConnectRequest(const NodeConnect
     // if we have a username from the connect request, set it on the DomainServerNodeData
     nodeData->setUsername(username);
     
-    // also add an interpolation to JSONBreakableMarshal so that servers can get username in stats
-    JSONBreakableMarshal::addInterpolationForKey(USERNAME_UUID_REPLACEMENT_STATS_KEY,
-                                                 uuidStringWithoutCurlyBraces(newNode->getUUID()), username);
+    // also add an interpolation to DomainServerNodeData so that servers can get username in stats
+    nodeData->addOverrideForKey(USERNAME_UUID_REPLACEMENT_STATS_KEY,
+                                uuidStringWithoutCurlyBraces(newNode->getUUID()), username);
     
     return newNode;
 }
