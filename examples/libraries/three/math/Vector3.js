@@ -9,842 +9,842 @@
 
 THREE.Vector3 = function ( x, y, z ) {
 
-	this.x = x || 0;
-	this.y = y || 0;
-	this.z = z || 0;
+    this.x = x || 0;
+    this.y = y || 0;
+    this.z = z || 0;
 
 };
 
 THREE.Vector3.prototype = {
 
-	constructor: THREE.Vector3,
+    constructor: THREE.Vector3,
 
-	set: function ( x, y, z ) {
+    set: function ( x, y, z ) {
 
-		this.x = x;
-		this.y = y;
-		this.z = z;
+        this.x = x;
+        this.y = y;
+        this.z = z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setX: function ( x ) {
+    setX: function ( x ) {
 
-		this.x = x;
+        this.x = x;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setY: function ( y ) {
+    setY: function ( y ) {
 
-		this.y = y;
+        this.y = y;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setZ: function ( z ) {
+    setZ: function ( z ) {
 
-		this.z = z;
+        this.z = z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setComponent: function ( index, value ) {
+    setComponent: function ( index, value ) {
 
-		switch ( index ) {
+        switch ( index ) {
 
-			case 0: this.x = value; break;
-			case 1: this.y = value; break;
-			case 2: this.z = value; break;
-			default: throw new Error( 'index is out of range: ' + index );
+            case 0: this.x = value; break;
+            case 1: this.y = value; break;
+            case 2: this.z = value; break;
+            default: throw new Error( 'index is out of range: ' + index );
 
-		}
+        }
 
-	},
+    },
 
-	getComponent: function ( index ) {
+    getComponent: function ( index ) {
 
-		switch ( index ) {
+        switch ( index ) {
 
-			case 0: return this.x;
-			case 1: return this.y;
-			case 2: return this.z;
-			default: throw new Error( 'index is out of range: ' + index );
+            case 0: return this.x;
+            case 1: return this.y;
+            case 2: return this.z;
+            default: throw new Error( 'index is out of range: ' + index );
 
-		}
+        }
 
-	},
+    },
 
-	copy: function ( v ) {
+    copy: function ( v ) {
 
-		this.x = v.x;
-		this.y = v.y;
-		this.z = v.z;
+        this.x = v.x;
+        this.y = v.y;
+        this.z = v.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	add: function ( v, w ) {
+    add: function ( v, w ) {
 
-		if ( w !== undefined ) {
+        if ( w !== undefined ) {
 
-			THREE.warn( 'THREE.Vector3: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
-			return this.addVectors( v, w );
+            THREE.warn( 'THREE.Vector3: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
+            return this.addVectors( v, w );
 
-		}
+        }
 
-		this.x += v.x;
-		this.y += v.y;
-		this.z += v.z;
+        this.x += v.x;
+        this.y += v.y;
+        this.z += v.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	addScalar: function ( s ) {
+    addScalar: function ( s ) {
 
-		this.x += s;
-		this.y += s;
-		this.z += s;
+        this.x += s;
+        this.y += s;
+        this.z += s;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	addVectors: function ( a, b ) {
+    addVectors: function ( a, b ) {
 
-		this.x = a.x + b.x;
-		this.y = a.y + b.y;
-		this.z = a.z + b.z;
+        this.x = a.x + b.x;
+        this.y = a.y + b.y;
+        this.z = a.z + b.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	sub: function ( v, w ) {
+    sub: function ( v, w ) {
 
-		if ( w !== undefined ) {
+        if ( w !== undefined ) {
 
-			THREE.warn( 'THREE.Vector3: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
-			return this.subVectors( v, w );
+            THREE.warn( 'THREE.Vector3: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
+            return this.subVectors( v, w );
 
-		}
+        }
 
-		this.x -= v.x;
-		this.y -= v.y;
-		this.z -= v.z;
+        this.x -= v.x;
+        this.y -= v.y;
+        this.z -= v.z;
 
-		return this;
+        return this;
 
-	},
-	
-	subScalar: function ( s ) {
+    },
+    
+    subScalar: function ( s ) {
 
-		this.x -= s;
-		this.y -= s;
-		this.z -= s;
+        this.x -= s;
+        this.y -= s;
+        this.z -= s;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	subVectors: function ( a, b ) {
+    subVectors: function ( a, b ) {
 
-		this.x = a.x - b.x;
-		this.y = a.y - b.y;
-		this.z = a.z - b.z;
+        this.x = a.x - b.x;
+        this.y = a.y - b.y;
+        this.z = a.z - b.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	multiply: function ( v, w ) {
+    multiply: function ( v, w ) {
 
-		if ( w !== undefined ) {
+        if ( w !== undefined ) {
 
-			THREE.warn( 'THREE.Vector3: .multiply() now only accepts one argument. Use .multiplyVectors( a, b ) instead.' );
-			return this.multiplyVectors( v, w );
+            THREE.warn( 'THREE.Vector3: .multiply() now only accepts one argument. Use .multiplyVectors( a, b ) instead.' );
+            return this.multiplyVectors( v, w );
 
-		}
+        }
 
-		this.x *= v.x;
-		this.y *= v.y;
-		this.z *= v.z;
+        this.x *= v.x;
+        this.y *= v.y;
+        this.z *= v.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	multiplyScalar: function ( scalar ) {
+    multiplyScalar: function ( scalar ) {
 
-		this.x *= scalar;
-		this.y *= scalar;
-		this.z *= scalar;
+        this.x *= scalar;
+        this.y *= scalar;
+        this.z *= scalar;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	multiplyVectors: function ( a, b ) {
+    multiplyVectors: function ( a, b ) {
 
-		this.x = a.x * b.x;
-		this.y = a.y * b.y;
-		this.z = a.z * b.z;
+        this.x = a.x * b.x;
+        this.y = a.y * b.y;
+        this.z = a.z * b.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	applyEuler: function () {
+    applyEuler: function () {
 
-		var quaternion;
+        var quaternion;
 
-		return function ( euler ) {
+        return function ( euler ) {
 
-			if ( euler instanceof THREE.Euler === false ) {
+            if ( euler instanceof THREE.Euler === false ) {
 
-				THREE.error( 'THREE.Vector3: .applyEuler() now expects a Euler rotation rather than a Vector3 and order.' );
+                THREE.error( 'THREE.Vector3: .applyEuler() now expects a Euler rotation rather than a Vector3 and order.' );
 
-			}
+            }
 
-			if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
+            if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
 
-			this.applyQuaternion( quaternion.setFromEuler( euler ) );
+            this.applyQuaternion( quaternion.setFromEuler( euler ) );
 
-			return this;
+            return this;
 
-		};
+        };
 
-	}(),
+    }(),
 
-	applyAxisAngle: function () {
+    applyAxisAngle: function () {
 
-		var quaternion;
+        var quaternion;
 
-		return function ( axis, angle ) {
+        return function ( axis, angle ) {
 
-			if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
+            if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
 
-			this.applyQuaternion( quaternion.setFromAxisAngle( axis, angle ) );
+            this.applyQuaternion( quaternion.setFromAxisAngle( axis, angle ) );
 
-			return this;
+            return this;
 
-		};
+        };
 
-	}(),
+    }(),
 
-	applyMatrix3: function ( m ) {
+    applyMatrix3: function ( m ) {
 
-		var x = this.x;
-		var y = this.y;
-		var z = this.z;
+        var x = this.x;
+        var y = this.y;
+        var z = this.z;
 
-		var e = m.elements;
+        var e = m.elements;
 
-		this.x = e[ 0 ] * x + e[ 3 ] * y + e[ 6 ] * z;
-		this.y = e[ 1 ] * x + e[ 4 ] * y + e[ 7 ] * z;
-		this.z = e[ 2 ] * x + e[ 5 ] * y + e[ 8 ] * z;
+        this.x = e[ 0 ] * x + e[ 3 ] * y + e[ 6 ] * z;
+        this.y = e[ 1 ] * x + e[ 4 ] * y + e[ 7 ] * z;
+        this.z = e[ 2 ] * x + e[ 5 ] * y + e[ 8 ] * z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	applyMatrix4: function ( m ) {
+    applyMatrix4: function ( m ) {
 
-		// input: THREE.Matrix4 affine matrix
+        // input: THREE.Matrix4 affine matrix
 
-		var x = this.x, y = this.y, z = this.z;
+        var x = this.x, y = this.y, z = this.z;
 
-		var e = m.elements;
+        var e = m.elements;
 
-		this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ];
-		this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ];
-		this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
+        this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ];
+        this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ];
+        this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	applyProjection: function ( m ) {
+    applyProjection: function ( m ) {
 
-		// input: THREE.Matrix4 projection matrix
+        // input: THREE.Matrix4 projection matrix
 
-		var x = this.x, y = this.y, z = this.z;
+        var x = this.x, y = this.y, z = this.z;
 
-		var e = m.elements;
-		var d = 1 / ( e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] ); // perspective divide
+        var e = m.elements;
+        var d = 1 / ( e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] ); // perspective divide
 
-		this.x = ( e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ] ) * d;
-		this.y = ( e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ] ) * d;
-		this.z = ( e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] ) * d;
+        this.x = ( e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ] ) * d;
+        this.y = ( e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ] ) * d;
+        this.z = ( e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] ) * d;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	applyQuaternion: function ( q ) {
+    applyQuaternion: function ( q ) {
 
-		var x = this.x;
-		var y = this.y;
-		var z = this.z;
+        var x = this.x;
+        var y = this.y;
+        var z = this.z;
 
-		var qx = q.x;
-		var qy = q.y;
-		var qz = q.z;
-		var qw = q.w;
+        var qx = q.x;
+        var qy = q.y;
+        var qz = q.z;
+        var qw = q.w;
 
-		// calculate quat * vector
+        // calculate quat * vector
 
-		var ix =  qw * x + qy * z - qz * y;
-		var iy =  qw * y + qz * x - qx * z;
-		var iz =  qw * z + qx * y - qy * x;
-		var iw = - qx * x - qy * y - qz * z;
+        var ix =  qw * x + qy * z - qz * y;
+        var iy =  qw * y + qz * x - qx * z;
+        var iz =  qw * z + qx * y - qy * x;
+        var iw = - qx * x - qy * y - qz * z;
 
-		// calculate result * inverse quat
+        // calculate result * inverse quat
 
-		this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
-		this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
-		this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
+        this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
+        this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
+        this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	project: function () {
+    project: function () {
 
-		var matrix;
+        var matrix;
 
-		return function ( camera ) {
+        return function ( camera ) {
 
-			if ( matrix === undefined ) matrix = new THREE.Matrix4();
+            if ( matrix === undefined ) matrix = new THREE.Matrix4();
 
-			matrix.multiplyMatrices( camera.projectionMatrix, matrix.getInverse( camera.matrixWorld ) );
-			return this.applyProjection( matrix );
+            matrix.multiplyMatrices( camera.projectionMatrix, matrix.getInverse( camera.matrixWorld ) );
+            return this.applyProjection( matrix );
 
-		};
+        };
 
-	}(),
+    }(),
 
-	unproject: function () {
+    unproject: function () {
 
-		var matrix;
+        var matrix;
 
-		return function ( camera ) {
+        return function ( camera ) {
 
-			if ( matrix === undefined ) matrix = new THREE.Matrix4();
+            if ( matrix === undefined ) matrix = new THREE.Matrix4();
 
-			matrix.multiplyMatrices( camera.matrixWorld, matrix.getInverse( camera.projectionMatrix ) );
-			return this.applyProjection( matrix );
+            matrix.multiplyMatrices( camera.matrixWorld, matrix.getInverse( camera.projectionMatrix ) );
+            return this.applyProjection( matrix );
 
-		};
+        };
 
-	}(),
+    }(),
 
-	transformDirection: function ( m ) {
+    transformDirection: function ( m ) {
 
-		// input: THREE.Matrix4 affine matrix
-		// vector interpreted as a direction
+        // input: THREE.Matrix4 affine matrix
+        // vector interpreted as a direction
 
-		var x = this.x, y = this.y, z = this.z;
+        var x = this.x, y = this.y, z = this.z;
 
-		var e = m.elements;
+        var e = m.elements;
 
-		this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z;
-		this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z;
-		this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z;
+        this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z;
+        this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z;
+        this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z;
 
-		this.normalize();
+        this.normalize();
 
-		return this;
+        return this;
 
-	},
+    },
 
-	divide: function ( v ) {
+    divide: function ( v ) {
 
-		this.x /= v.x;
-		this.y /= v.y;
-		this.z /= v.z;
+        this.x /= v.x;
+        this.y /= v.y;
+        this.z /= v.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	divideScalar: function ( scalar ) {
+    divideScalar: function ( scalar ) {
 
-		if ( scalar !== 0 ) {
+        if ( scalar !== 0 ) {
 
-			var invScalar = 1 / scalar;
+            var invScalar = 1 / scalar;
 
-			this.x *= invScalar;
-			this.y *= invScalar;
-			this.z *= invScalar;
+            this.x *= invScalar;
+            this.y *= invScalar;
+            this.z *= invScalar;
 
-		} else {
+        } else {
 
-			this.x = 0;
-			this.y = 0;
-			this.z = 0;
+            this.x = 0;
+            this.y = 0;
+            this.z = 0;
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	min: function ( v ) {
+    min: function ( v ) {
 
-		if ( this.x > v.x ) {
+        if ( this.x > v.x ) {
 
-			this.x = v.x;
+            this.x = v.x;
 
-		}
+        }
 
-		if ( this.y > v.y ) {
+        if ( this.y > v.y ) {
 
-			this.y = v.y;
+            this.y = v.y;
 
-		}
+        }
 
-		if ( this.z > v.z ) {
+        if ( this.z > v.z ) {
 
-			this.z = v.z;
+            this.z = v.z;
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	max: function ( v ) {
+    max: function ( v ) {
 
-		if ( this.x < v.x ) {
+        if ( this.x < v.x ) {
 
-			this.x = v.x;
+            this.x = v.x;
 
-		}
+        }
 
-		if ( this.y < v.y ) {
+        if ( this.y < v.y ) {
 
-			this.y = v.y;
+            this.y = v.y;
 
-		}
+        }
 
-		if ( this.z < v.z ) {
+        if ( this.z < v.z ) {
 
-			this.z = v.z;
+            this.z = v.z;
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	clamp: function ( min, max ) {
+    clamp: function ( min, max ) {
 
-		// This function assumes min < max, if this assumption isn't true it will not operate correctly
+        // This function assumes min < max, if this assumption isn't true it will not operate correctly
 
-		if ( this.x < min.x ) {
+        if ( this.x < min.x ) {
 
-			this.x = min.x;
+            this.x = min.x;
 
-		} else if ( this.x > max.x ) {
+        } else if ( this.x > max.x ) {
 
-			this.x = max.x;
+            this.x = max.x;
 
-		}
+        }
 
-		if ( this.y < min.y ) {
+        if ( this.y < min.y ) {
 
-			this.y = min.y;
+            this.y = min.y;
 
-		} else if ( this.y > max.y ) {
+        } else if ( this.y > max.y ) {
 
-			this.y = max.y;
+            this.y = max.y;
 
-		}
+        }
 
-		if ( this.z < min.z ) {
+        if ( this.z < min.z ) {
 
-			this.z = min.z;
+            this.z = min.z;
 
-		} else if ( this.z > max.z ) {
+        } else if ( this.z > max.z ) {
 
-			this.z = max.z;
+            this.z = max.z;
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	clampScalar: ( function () {
+    clampScalar: ( function () {
 
-		var min, max;
+        var min, max;
 
-		return function ( minVal, maxVal ) {
+        return function ( minVal, maxVal ) {
 
-			if ( min === undefined ) {
+            if ( min === undefined ) {
 
-				min = new THREE.Vector3();
-				max = new THREE.Vector3();
+                min = new THREE.Vector3();
+                max = new THREE.Vector3();
 
-			}
+            }
 
-			min.set( minVal, minVal, minVal );
-			max.set( maxVal, maxVal, maxVal );
+            min.set( minVal, minVal, minVal );
+            max.set( maxVal, maxVal, maxVal );
 
-			return this.clamp( min, max );
+            return this.clamp( min, max );
 
-		};
+        };
 
-	} )(),
+    } )(),
 
-	floor: function () {
+    floor: function () {
 
-		this.x = Math.floor( this.x );
-		this.y = Math.floor( this.y );
-		this.z = Math.floor( this.z );
+        this.x = Math.floor( this.x );
+        this.y = Math.floor( this.y );
+        this.z = Math.floor( this.z );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	ceil: function () {
+    ceil: function () {
 
-		this.x = Math.ceil( this.x );
-		this.y = Math.ceil( this.y );
-		this.z = Math.ceil( this.z );
+        this.x = Math.ceil( this.x );
+        this.y = Math.ceil( this.y );
+        this.z = Math.ceil( this.z );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	round: function () {
+    round: function () {
 
-		this.x = Math.round( this.x );
-		this.y = Math.round( this.y );
-		this.z = Math.round( this.z );
+        this.x = Math.round( this.x );
+        this.y = Math.round( this.y );
+        this.z = Math.round( this.z );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	roundToZero: function () {
+    roundToZero: function () {
 
-		this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-		this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
-		this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
+        this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
+        this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
+        this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	negate: function () {
+    negate: function () {
 
-		this.x = - this.x;
-		this.y = - this.y;
-		this.z = - this.z;
+        this.x = - this.x;
+        this.y = - this.y;
+        this.z = - this.z;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	dot: function ( v ) {
+    dot: function ( v ) {
 
-		return this.x * v.x + this.y * v.y + this.z * v.z;
+        return this.x * v.x + this.y * v.y + this.z * v.z;
 
-	},
+    },
 
-	lengthSq: function () {
+    lengthSq: function () {
 
-		return this.x * this.x + this.y * this.y + this.z * this.z;
+        return this.x * this.x + this.y * this.y + this.z * this.z;
 
-	},
+    },
 
-	length: function () {
+    length: function () {
 
-		return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z );
+        return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z );
 
-	},
+    },
 
-	lengthManhattan: function () {
+    lengthManhattan: function () {
 
-		return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z );
+        return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z );
 
-	},
+    },
 
-	normalize: function () {
+    normalize: function () {
 
-		return this.divideScalar( this.length() );
+        return this.divideScalar( this.length() );
 
-	},
+    },
 
-	setLength: function ( l ) {
+    setLength: function ( l ) {
 
-		var oldLength = this.length();
+        var oldLength = this.length();
 
-		if ( oldLength !== 0 && l !== oldLength  ) {
+        if ( oldLength !== 0 && l !== oldLength  ) {
 
-			this.multiplyScalar( l / oldLength );
-		}
+            this.multiplyScalar( l / oldLength );
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	lerp: function ( v, alpha ) {
+    lerp: function ( v, alpha ) {
 
-		this.x += ( v.x - this.x ) * alpha;
-		this.y += ( v.y - this.y ) * alpha;
-		this.z += ( v.z - this.z ) * alpha;
+        this.x += ( v.x - this.x ) * alpha;
+        this.y += ( v.y - this.y ) * alpha;
+        this.z += ( v.z - this.z ) * alpha;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	lerpVectors: function ( v1, v2, alpha ) {
+    lerpVectors: function ( v1, v2, alpha ) {
 
-		this.subVectors( v2, v1 ).multiplyScalar( alpha ).add( v1 );
+        this.subVectors( v2, v1 ).multiplyScalar( alpha ).add( v1 );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	cross: function ( v, w ) {
+    cross: function ( v, w ) {
 
-		if ( w !== undefined ) {
+        if ( w !== undefined ) {
 
-			THREE.warn( 'THREE.Vector3: .cross() now only accepts one argument. Use .crossVectors( a, b ) instead.' );
-			return this.crossVectors( v, w );
+            THREE.warn( 'THREE.Vector3: .cross() now only accepts one argument. Use .crossVectors( a, b ) instead.' );
+            return this.crossVectors( v, w );
 
-		}
+        }
 
-		var x = this.x, y = this.y, z = this.z;
+        var x = this.x, y = this.y, z = this.z;
 
-		this.x = y * v.z - z * v.y;
-		this.y = z * v.x - x * v.z;
-		this.z = x * v.y - y * v.x;
+        this.x = y * v.z - z * v.y;
+        this.y = z * v.x - x * v.z;
+        this.z = x * v.y - y * v.x;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	crossVectors: function ( a, b ) {
+    crossVectors: function ( a, b ) {
 
-		var ax = a.x, ay = a.y, az = a.z;
-		var bx = b.x, by = b.y, bz = b.z;
+        var ax = a.x, ay = a.y, az = a.z;
+        var bx = b.x, by = b.y, bz = b.z;
 
-		this.x = ay * bz - az * by;
-		this.y = az * bx - ax * bz;
-		this.z = ax * by - ay * bx;
+        this.x = ay * bz - az * by;
+        this.y = az * bx - ax * bz;
+        this.z = ax * by - ay * bx;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	projectOnVector: function () {
+    projectOnVector: function () {
 
-		var v1, dot;
+        var v1, dot;
 
-		return function ( vector ) {
+        return function ( vector ) {
 
-			if ( v1 === undefined ) v1 = new THREE.Vector3();
+            if ( v1 === undefined ) v1 = new THREE.Vector3();
 
-			v1.copy( vector ).normalize();
+            v1.copy( vector ).normalize();
 
-			dot = this.dot( v1 );
+            dot = this.dot( v1 );
 
-			return this.copy( v1 ).multiplyScalar( dot );
+            return this.copy( v1 ).multiplyScalar( dot );
 
-		};
+        };
 
-	}(),
+    }(),
 
-	projectOnPlane: function () {
+    projectOnPlane: function () {
 
-		var v1;
+        var v1;
 
-		return function ( planeNormal ) {
+        return function ( planeNormal ) {
 
-			if ( v1 === undefined ) v1 = new THREE.Vector3();
+            if ( v1 === undefined ) v1 = new THREE.Vector3();
 
-			v1.copy( this ).projectOnVector( planeNormal );
+            v1.copy( this ).projectOnVector( planeNormal );
 
-			return this.sub( v1 );
+            return this.sub( v1 );
 
-		}
+        }
 
-	}(),
+    }(),
 
-	reflect: function () {
+    reflect: function () {
 
-		// reflect incident vector off plane orthogonal to normal
-		// normal is assumed to have unit length
+        // reflect incident vector off plane orthogonal to normal
+        // normal is assumed to have unit length
 
-		var v1;
+        var v1;
 
-		return function ( normal ) {
+        return function ( normal ) {
 
-			if ( v1 === undefined ) v1 = new THREE.Vector3();
+            if ( v1 === undefined ) v1 = new THREE.Vector3();
 
-			return this.sub( v1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
+            return this.sub( v1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
 
-		}
+        }
 
-	}(),
+    }(),
 
-	angleTo: function ( v ) {
+    angleTo: function ( v ) {
 
-		var theta = this.dot( v ) / ( this.length() * v.length() );
+        var theta = this.dot( v ) / ( this.length() * v.length() );
 
-		// clamp, to handle numerical problems
+        // clamp, to handle numerical problems
 
-		return Math.acos( THREE.Math.clamp( theta, - 1, 1 ) );
+        return Math.acos( THREE.Math.clamp( theta, - 1, 1 ) );
 
-	},
+    },
 
-	distanceTo: function ( v ) {
+    distanceTo: function ( v ) {
 
-		return Math.sqrt( this.distanceToSquared( v ) );
+        return Math.sqrt( this.distanceToSquared( v ) );
 
-	},
+    },
 
-	distanceToSquared: function ( v ) {
+    distanceToSquared: function ( v ) {
 
-		var dx = this.x - v.x;
-		var dy = this.y - v.y;
-		var dz = this.z - v.z;
+        var dx = this.x - v.x;
+        var dy = this.y - v.y;
+        var dz = this.z - v.z;
 
-		return dx * dx + dy * dy + dz * dz;
+        return dx * dx + dy * dy + dz * dz;
 
-	},
+    },
 
-	setEulerFromRotationMatrix: function ( m, order ) {
+    setEulerFromRotationMatrix: function ( m, order ) {
 
-		THREE.error( 'THREE.Vector3: .setEulerFromRotationMatrix() has been removed. Use Euler.setFromRotationMatrix() instead.' );
+        THREE.error( 'THREE.Vector3: .setEulerFromRotationMatrix() has been removed. Use Euler.setFromRotationMatrix() instead.' );
 
-	},
+    },
 
-	setEulerFromQuaternion: function ( q, order ) {
+    setEulerFromQuaternion: function ( q, order ) {
 
-		THREE.error( 'THREE.Vector3: .setEulerFromQuaternion() has been removed. Use Euler.setFromQuaternion() instead.' );
+        THREE.error( 'THREE.Vector3: .setEulerFromQuaternion() has been removed. Use Euler.setFromQuaternion() instead.' );
 
-	},
+    },
 
-	getPositionFromMatrix: function ( m ) {
+    getPositionFromMatrix: function ( m ) {
 
-		THREE.warn( 'THREE.Vector3: .getPositionFromMatrix() has been renamed to .setFromMatrixPosition().' );
+        THREE.warn( 'THREE.Vector3: .getPositionFromMatrix() has been renamed to .setFromMatrixPosition().' );
 
-		return this.setFromMatrixPosition( m );
+        return this.setFromMatrixPosition( m );
 
-	},
+    },
 
-	getScaleFromMatrix: function ( m ) {
+    getScaleFromMatrix: function ( m ) {
 
-		THREE.warn( 'THREE.Vector3: .getScaleFromMatrix() has been renamed to .setFromMatrixScale().' );
+        THREE.warn( 'THREE.Vector3: .getScaleFromMatrix() has been renamed to .setFromMatrixScale().' );
 
-		return this.setFromMatrixScale( m );
-	},
+        return this.setFromMatrixScale( m );
+    },
 
-	getColumnFromMatrix: function ( index, matrix ) {
+    getColumnFromMatrix: function ( index, matrix ) {
 
-		THREE.warn( 'THREE.Vector3: .getColumnFromMatrix() has been renamed to .setFromMatrixColumn().' );
+        THREE.warn( 'THREE.Vector3: .getColumnFromMatrix() has been renamed to .setFromMatrixColumn().' );
 
-		return this.setFromMatrixColumn( index, matrix );
+        return this.setFromMatrixColumn( index, matrix );
 
-	},
+    },
 
-	setFromMatrixPosition: function ( m ) {
+    setFromMatrixPosition: function ( m ) {
 
-		this.x = m.elements[ 12 ];
-		this.y = m.elements[ 13 ];
-		this.z = m.elements[ 14 ];
+        this.x = m.elements[ 12 ];
+        this.y = m.elements[ 13 ];
+        this.z = m.elements[ 14 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setFromMatrixScale: function ( m ) {
+    setFromMatrixScale: function ( m ) {
 
-		var sx = this.set( m.elements[ 0 ], m.elements[ 1 ], m.elements[  2 ] ).length();
-		var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
-		var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();
+        var sx = this.set( m.elements[ 0 ], m.elements[ 1 ], m.elements[  2 ] ).length();
+        var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
+        var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();
 
-		this.x = sx;
-		this.y = sy;
-		this.z = sz;
+        this.x = sx;
+        this.y = sy;
+        this.z = sz;
 
-		return this;
-	},
+        return this;
+    },
 
-	setFromMatrixColumn: function ( index, matrix ) {
-		
-		var offset = index * 4;
+    setFromMatrixColumn: function ( index, matrix ) {
+        
+        var offset = index * 4;
 
-		var me = matrix.elements;
+        var me = matrix.elements;
 
-		this.x = me[ offset ];
-		this.y = me[ offset + 1 ];
-		this.z = me[ offset + 2 ];
+        this.x = me[ offset ];
+        this.y = me[ offset + 1 ];
+        this.z = me[ offset + 2 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	equals: function ( v ) {
+    equals: function ( v ) {
 
-		return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
+        return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
 
-	},
+    },
 
-	fromArray: function ( array, offset ) {
+    fromArray: function ( array, offset ) {
 
-		if ( offset === undefined ) offset = 0;
+        if ( offset === undefined ) offset = 0;
 
-		this.x = array[ offset ];
-		this.y = array[ offset + 1 ];
-		this.z = array[ offset + 2 ];
+        this.x = array[ offset ];
+        this.y = array[ offset + 1 ];
+        this.z = array[ offset + 2 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	toArray: function ( array, offset ) {
+    toArray: function ( array, offset ) {
 
-		if ( array === undefined ) array = [];
-		if ( offset === undefined ) offset = 0;
+        if ( array === undefined ) array = [];
+        if ( offset === undefined ) offset = 0;
 
-		array[ offset ] = this.x;
-		array[ offset + 1 ] = this.y;
-		array[ offset + 2 ] = this.z;
+        array[ offset ] = this.x;
+        array[ offset + 1 ] = this.y;
+        array[ offset + 2 ] = this.z;
 
-		return array;
+        return array;
 
-	},
+    },
 
-	fromAttribute: function ( attribute, index, offset ) {
+    fromAttribute: function ( attribute, index, offset ) {
 
-		if ( offset === undefined ) offset = 0;
+        if ( offset === undefined ) offset = 0;
 
-		index = index * attribute.itemSize + offset;
+        index = index * attribute.itemSize + offset;
 
-		this.x = attribute.array[ index ];
-		this.y = attribute.array[ index + 1 ];
-		this.z = attribute.array[ index + 2 ];
+        this.x = attribute.array[ index ];
+        this.y = attribute.array[ index + 1 ];
+        this.z = attribute.array[ index + 2 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	clone: function () {
+    clone: function () {
 
-		return new THREE.Vector3( this.x, this.y, this.z );
+        return new THREE.Vector3( this.x, this.y, this.z );
 
-	}
+    }
 
 };

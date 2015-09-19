@@ -8,7 +8,7 @@ THREE = { REVISION: '71' };
 
 if ( typeof module === 'object' ) {
 
-	module.exports = THREE;
+    module.exports = THREE;
 
 }
 
@@ -16,13 +16,13 @@ if ( typeof module === 'object' ) {
 
 if ( Math.sign === undefined ) {
 
-	// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sign
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sign
 
-	Math.sign = function ( x ) {
+    Math.sign = function ( x ) {
 
-		return ( x < 0 ) ? - 1 : ( x > 0 ) ? 1 : +x;
+        return ( x < 0 ) ? - 1 : ( x > 0 ) ? 1 : +x;
 
-	};
+    };
 
 }
 
@@ -197,38 +197,38 @@ THREE.RGBA_PVRTC_2BPPV1_Format = 2103;
 
 THREE.Projector = function () {
 
-	THREE.error( 'THREE.Projector has been moved to /examples/js/renderers/Projector.js.' );
+    THREE.error( 'THREE.Projector has been moved to /examples/js/renderers/Projector.js.' );
 
-	this.projectVector = function ( vector, camera ) {
+    this.projectVector = function ( vector, camera ) {
 
-		THREE.warn( 'THREE.Projector: .projectVector() is now vector.project().' );
-		vector.project( camera );
+        THREE.warn( 'THREE.Projector: .projectVector() is now vector.project().' );
+        vector.project( camera );
 
-	};
+    };
 
-	this.unprojectVector = function ( vector, camera ) {
+    this.unprojectVector = function ( vector, camera ) {
 
-		THREE.warn( 'THREE.Projector: .unprojectVector() is now vector.unproject().' );
-		vector.unproject( camera );
+        THREE.warn( 'THREE.Projector: .unprojectVector() is now vector.unproject().' );
+        vector.unproject( camera );
 
-	};
+    };
 
-	this.pickingRay = function ( vector, camera ) {
+    this.pickingRay = function ( vector, camera ) {
 
-		THREE.error( 'THREE.Projector: .pickingRay() is now raycaster.setFromCamera().' );
+        THREE.error( 'THREE.Projector: .pickingRay() is now raycaster.setFromCamera().' );
 
-	};
+    };
 
 };
 
 THREE.CanvasRenderer = function () {
 
-	THREE.error( 'THREE.CanvasRenderer has been moved to /examples/js/renderers/CanvasRenderer.js' );
+    THREE.error( 'THREE.CanvasRenderer has been moved to /examples/js/renderers/CanvasRenderer.js' );
 
-	this.domElement = document.createElement( 'canvas' );
-	this.clear = function () {};
-	this.render = function () {};
-	this.setClearColor = function () {};
-	this.setSize = function () {};
+    this.domElement = document.createElement( 'canvas' );
+    this.clear = function () {};
+    this.render = function () {};
+    this.setClearColor = function () {};
+    this.setSize = function () {};
 
 };

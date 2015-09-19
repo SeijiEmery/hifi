@@ -5,148 +5,148 @@
 
 THREE.Sphere = function ( center, radius ) {
 
-	this.center = ( center !== undefined ) ? center : new THREE.Vector3();
-	this.radius = ( radius !== undefined ) ? radius : 0;
+    this.center = ( center !== undefined ) ? center : new THREE.Vector3();
+    this.radius = ( radius !== undefined ) ? radius : 0;
 
 };
 
 THREE.Sphere.prototype = {
 
-	constructor: THREE.Sphere,
+    constructor: THREE.Sphere,
 
-	set: function ( center, radius ) {
+    set: function ( center, radius ) {
 
-		this.center.copy( center );
-		this.radius = radius;
+        this.center.copy( center );
+        this.radius = radius;
 
-		return this;
-	},
+        return this;
+    },
 
-	setFromPoints: function () {
+    setFromPoints: function () {
 
-		var box = new THREE.Box3();
+        var box = new THREE.Box3();
 
-		return function ( points, optionalCenter ) {
+        return function ( points, optionalCenter ) {
 
-			var center = this.center;
+            var center = this.center;
 
-			if ( optionalCenter !== undefined ) {
+            if ( optionalCenter !== undefined ) {
 
-				center.copy( optionalCenter );
+                center.copy( optionalCenter );
 
-			} else {
+            } else {
 
-				box.setFromPoints( points ).center( center );
+                box.setFromPoints( points ).center( center );
 
-			}
+            }
 
-			var maxRadiusSq = 0;
+            var maxRadiusSq = 0;
 
-			for ( var i = 0, il = points.length; i < il; i ++ ) {
+            for ( var i = 0, il = points.length; i < il; i ++ ) {
 
-				maxRadiusSq = Math.max( maxRadiusSq, center.distanceToSquared( points[ i ] ) );
+                maxRadiusSq = Math.max( maxRadiusSq, center.distanceToSquared( points[ i ] ) );
 
-			}
+            }
 
-			this.radius = Math.sqrt( maxRadiusSq );
+            this.radius = Math.sqrt( maxRadiusSq );
 
-			return this;
+            return this;
 
-		};
+        };
 
-	}(),
+    }(),
 
-	copy: function ( sphere ) {
+    copy: function ( sphere ) {
 
-		this.center.copy( sphere.center );
-		this.radius = sphere.radius;
+        this.center.copy( sphere.center );
+        this.radius = sphere.radius;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	empty: function () {
+    empty: function () {
 
-		return ( this.radius <= 0 );
+        return ( this.radius <= 0 );
 
-	},
+    },
 
-	containsPoint: function ( point ) {
+    containsPoint: function ( point ) {
 
-		return ( point.distanceToSquared( this.center ) <= ( this.radius * this.radius ) );
+        return ( point.distanceToSquared( this.center ) <= ( this.radius * this.radius ) );
 
-	},
+    },
 
-	distanceToPoint: function ( point ) {
+    distanceToPoint: function ( point ) {
 
-		return ( point.distanceTo( this.center ) - this.radius );
+        return ( point.distanceTo( this.center ) - this.radius );
 
-	},
+    },
 
-	intersectsSphere: function ( sphere ) {
+    intersectsSphere: function ( sphere ) {
 
-		var radiusSum = this.radius + sphere.radius;
+        var radiusSum = this.radius + sphere.radius;
 
-		return sphere.center.distanceToSquared( this.center ) <= ( radiusSum * radiusSum );
+        return sphere.center.distanceToSquared( this.center ) <= ( radiusSum * radiusSum );
 
-	},
+    },
 
-	clampPoint: function ( point, optionalTarget ) {
+    clampPoint: function ( point, optionalTarget ) {
 
-		var deltaLengthSq = this.center.distanceToSquared( point );
+        var deltaLengthSq = this.center.distanceToSquared( point );
 
-		var result = optionalTarget || new THREE.Vector3();
-		result.copy( point );
+        var result = optionalTarget || new THREE.Vector3();
+        result.copy( point );
 
-		if ( deltaLengthSq > ( this.radius * this.radius ) ) {
+        if ( deltaLengthSq > ( this.radius * this.radius ) ) {
 
-			result.sub( this.center ).normalize();
-			result.multiplyScalar( this.radius ).add( this.center );
+            result.sub( this.center ).normalize();
+            result.multiplyScalar( this.radius ).add( this.center );
 
-		}
+        }
 
-		return result;
+        return result;
 
-	},
+    },
 
-	getBoundingBox: function ( optionalTarget ) {
+    getBoundingBox: function ( optionalTarget ) {
 
-		var box = optionalTarget || new THREE.Box3();
+        var box = optionalTarget || new THREE.Box3();
 
-		box.set( this.center, this.center );
-		box.expandByScalar( this.radius );
+        box.set( this.center, this.center );
+        box.expandByScalar( this.radius );
 
-		return box;
+        return box;
 
-	},
+    },
 
-	applyMatrix4: function ( matrix ) {
+    applyMatrix4: function ( matrix ) {
 
-		this.center.applyMatrix4( matrix );
-		this.radius = this.radius * matrix.getMaxScaleOnAxis();
+        this.center.applyMatrix4( matrix );
+        this.radius = this.radius * matrix.getMaxScaleOnAxis();
 
-		return this;
+        return this;
 
-	},
+    },
 
-	translate: function ( offset ) {
+    translate: function ( offset ) {
 
-		this.center.add( offset );
+        this.center.add( offset );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	equals: function ( sphere ) {
+    equals: function ( sphere ) {
 
-		return sphere.center.equals( this.center ) && ( sphere.radius === this.radius );
+        return sphere.center.equals( this.center ) && ( sphere.radius === this.radius );
 
-	},
+    },
 
-	clone: function () {
+    clone: function () {
 
-		return new THREE.Sphere().copy( this );
+        return new THREE.Sphere().copy( this );
 
-	}
+    }
 
 };

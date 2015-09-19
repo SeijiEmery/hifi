@@ -4,391 +4,391 @@
 
 THREE.Color = function ( color ) {
 
-	if ( arguments.length === 3 ) {
+    if ( arguments.length === 3 ) {
 
-		return this.setRGB( arguments[ 0 ], arguments[ 1 ], arguments[ 2 ] );
+        return this.setRGB( arguments[ 0 ], arguments[ 1 ], arguments[ 2 ] );
 
-	}
+    }
 
-	return this.set( color )
+    return this.set( color )
 
 };
 
 THREE.Color.prototype = {
 
-	constructor: THREE.Color,
+    constructor: THREE.Color,
 
-	r: 1, g: 1, b: 1,
+    r: 1, g: 1, b: 1,
 
-	set: function ( value ) {
+    set: function ( value ) {
 
-		if ( value instanceof THREE.Color ) {
+        if ( value instanceof THREE.Color ) {
 
-			this.copy( value );
+            this.copy( value );
 
-		} else if ( typeof value === 'number' ) {
+        } else if ( typeof value === 'number' ) {
 
-			this.setHex( value );
+            this.setHex( value );
 
-		} else if ( typeof value === 'string' ) {
+        } else if ( typeof value === 'string' ) {
 
-			this.setStyle( value );
+            this.setStyle( value );
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setHex: function ( hex ) {
+    setHex: function ( hex ) {
 
-		hex = Math.floor( hex );
+        hex = Math.floor( hex );
 
-		this.r = ( hex >> 16 & 255 ) / 255;
-		this.g = ( hex >> 8 & 255 ) / 255;
-		this.b = ( hex & 255 ) / 255;
+        this.r = ( hex >> 16 & 255 ) / 255;
+        this.g = ( hex >> 8 & 255 ) / 255;
+        this.b = ( hex & 255 ) / 255;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setRGB: function ( r, g, b ) {
+    setRGB: function ( r, g, b ) {
 
-		this.r = r;
-		this.g = g;
-		this.b = b;
+        this.r = r;
+        this.g = g;
+        this.b = b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setHSL: function ( h, s, l ) {
+    setHSL: function ( h, s, l ) {
 
-		// h,s,l ranges are in 0.0 - 1.0
+        // h,s,l ranges are in 0.0 - 1.0
 
-		if ( s === 0 ) {
+        if ( s === 0 ) {
 
-			this.r = this.g = this.b = l;
+            this.r = this.g = this.b = l;
 
-		} else {
+        } else {
 
-			var hue2rgb = function ( p, q, t ) {
+            var hue2rgb = function ( p, q, t ) {
 
-				if ( t < 0 ) t += 1;
-				if ( t > 1 ) t -= 1;
-				if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
-				if ( t < 1 / 2 ) return q;
-				if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
-				return p;
+                if ( t < 0 ) t += 1;
+                if ( t > 1 ) t -= 1;
+                if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
+                if ( t < 1 / 2 ) return q;
+                if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
+                return p;
 
-			};
+            };
 
-			var p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
-			var q = ( 2 * l ) - p;
+            var p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
+            var q = ( 2 * l ) - p;
 
-			this.r = hue2rgb( q, p, h + 1 / 3 );
-			this.g = hue2rgb( q, p, h );
-			this.b = hue2rgb( q, p, h - 1 / 3 );
+            this.r = hue2rgb( q, p, h + 1 / 3 );
+            this.g = hue2rgb( q, p, h );
+            this.b = hue2rgb( q, p, h - 1 / 3 );
 
-		}
+        }
 
-		return this;
+        return this;
 
-	},
+    },
 
-	setStyle: function ( style ) {
+    setStyle: function ( style ) {
 
-		// rgb(255,0,0)
+        // rgb(255,0,0)
 
-		if ( /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.test( style ) ) {
+        if ( /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.test( style ) ) {
 
-			var color = /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.exec( style );
+            var color = /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.exec( style );
 
-			this.r = Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255;
-			this.g = Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255;
-			this.b = Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255;
+            this.r = Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255;
+            this.g = Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255;
+            this.b = Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255;
 
-			return this;
+            return this;
 
-		}
+        }
 
-		// rgb(100%,0%,0%)
+        // rgb(100%,0%,0%)
 
-		if ( /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.test( style ) ) {
+        if ( /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.test( style ) ) {
 
-			var color = /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.exec( style );
+            var color = /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.exec( style );
 
-			this.r = Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100;
-			this.g = Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100;
-			this.b = Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100;
+            this.r = Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100;
+            this.g = Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100;
+            this.b = Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100;
 
-			return this;
+            return this;
 
-		}
+        }
 
-		// #ff0000
+        // #ff0000
 
-		if ( /^\#([0-9a-f]{6})$/i.test( style ) ) {
+        if ( /^\#([0-9a-f]{6})$/i.test( style ) ) {
 
-			var color = /^\#([0-9a-f]{6})$/i.exec( style );
+            var color = /^\#([0-9a-f]{6})$/i.exec( style );
 
-			this.setHex( parseInt( color[ 1 ], 16 ) );
+            this.setHex( parseInt( color[ 1 ], 16 ) );
 
-			return this;
+            return this;
 
-		}
+        }
 
-		// #f00
+        // #f00
 
-		if ( /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.test( style ) ) {
+        if ( /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.test( style ) ) {
 
-			var color = /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec( style );
+            var color = /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec( style );
 
-			this.setHex( parseInt( color[ 1 ] + color[ 1 ] + color[ 2 ] + color[ 2 ] + color[ 3 ] + color[ 3 ], 16 ) );
+            this.setHex( parseInt( color[ 1 ] + color[ 1 ] + color[ 2 ] + color[ 2 ] + color[ 3 ] + color[ 3 ], 16 ) );
 
-			return this;
+            return this;
 
-		}
+        }
 
-		// red
+        // red
 
-		if ( /^(\w+)$/i.test( style ) ) {
+        if ( /^(\w+)$/i.test( style ) ) {
 
-			this.setHex( THREE.ColorKeywords[ style ] );
+            this.setHex( THREE.ColorKeywords[ style ] );
 
-			return this;
+            return this;
 
-		}
+        }
 
 
-	},
+    },
 
-	copy: function ( color ) {
+    copy: function ( color ) {
 
-		this.r = color.r;
-		this.g = color.g;
-		this.b = color.b;
+        this.r = color.r;
+        this.g = color.g;
+        this.b = color.b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	copyGammaToLinear: function ( color, gammaFactor ) {
+    copyGammaToLinear: function ( color, gammaFactor ) {
 
-		if ( gammaFactor === undefined ) gammaFactor = 2.0;
+        if ( gammaFactor === undefined ) gammaFactor = 2.0;
 
-		this.r = Math.pow( color.r, gammaFactor );
-		this.g = Math.pow( color.g, gammaFactor );
-		this.b = Math.pow( color.b, gammaFactor );
+        this.r = Math.pow( color.r, gammaFactor );
+        this.g = Math.pow( color.g, gammaFactor );
+        this.b = Math.pow( color.b, gammaFactor );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	copyLinearToGamma: function ( color, gammaFactor ) {
+    copyLinearToGamma: function ( color, gammaFactor ) {
 
-		if ( gammaFactor === undefined ) gammaFactor = 2.0;
+        if ( gammaFactor === undefined ) gammaFactor = 2.0;
 
-		var safeInverse = ( gammaFactor > 0 ) ? ( 1.0 / gammaFactor ) : 1.0;
+        var safeInverse = ( gammaFactor > 0 ) ? ( 1.0 / gammaFactor ) : 1.0;
 
-		this.r = Math.pow( color.r, safeInverse );
-		this.g = Math.pow( color.g, safeInverse );
-		this.b = Math.pow( color.b, safeInverse );
+        this.r = Math.pow( color.r, safeInverse );
+        this.g = Math.pow( color.g, safeInverse );
+        this.b = Math.pow( color.b, safeInverse );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	convertGammaToLinear: function () {
+    convertGammaToLinear: function () {
 
-		var r = this.r, g = this.g, b = this.b;
+        var r = this.r, g = this.g, b = this.b;
 
-		this.r = r * r;
-		this.g = g * g;
-		this.b = b * b;
+        this.r = r * r;
+        this.g = g * g;
+        this.b = b * b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	convertLinearToGamma: function () {
+    convertLinearToGamma: function () {
 
-		this.r = Math.sqrt( this.r );
-		this.g = Math.sqrt( this.g );
-		this.b = Math.sqrt( this.b );
+        this.r = Math.sqrt( this.r );
+        this.g = Math.sqrt( this.g );
+        this.b = Math.sqrt( this.b );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	getHex: function () {
+    getHex: function () {
 
-		return ( this.r * 255 ) << 16 ^ ( this.g * 255 ) << 8 ^ ( this.b * 255 ) << 0;
+        return ( this.r * 255 ) << 16 ^ ( this.g * 255 ) << 8 ^ ( this.b * 255 ) << 0;
 
-	},
+    },
 
-	getHexString: function () {
+    getHexString: function () {
 
-		return ( '000000' + this.getHex().toString( 16 ) ).slice( - 6 );
+        return ( '000000' + this.getHex().toString( 16 ) ).slice( - 6 );
 
-	},
+    },
 
-	getHSL: function ( optionalTarget ) {
+    getHSL: function ( optionalTarget ) {
 
-		// h,s,l ranges are in 0.0 - 1.0
+        // h,s,l ranges are in 0.0 - 1.0
 
-		var hsl = optionalTarget || { h: 0, s: 0, l: 0 };
+        var hsl = optionalTarget || { h: 0, s: 0, l: 0 };
 
-		var r = this.r, g = this.g, b = this.b;
+        var r = this.r, g = this.g, b = this.b;
 
-		var max = Math.max( r, g, b );
-		var min = Math.min( r, g, b );
+        var max = Math.max( r, g, b );
+        var min = Math.min( r, g, b );
 
-		var hue, saturation;
-		var lightness = ( min + max ) / 2.0;
+        var hue, saturation;
+        var lightness = ( min + max ) / 2.0;
 
-		if ( min === max ) {
+        if ( min === max ) {
 
-			hue = 0;
-			saturation = 0;
+            hue = 0;
+            saturation = 0;
 
-		} else {
+        } else {
 
-			var delta = max - min;
+            var delta = max - min;
 
-			saturation = lightness <= 0.5 ? delta / ( max + min ) : delta / ( 2 - max - min );
+            saturation = lightness <= 0.5 ? delta / ( max + min ) : delta / ( 2 - max - min );
 
-			switch ( max ) {
+            switch ( max ) {
 
-				case r: hue = ( g - b ) / delta + ( g < b ? 6 : 0 ); break;
-				case g: hue = ( b - r ) / delta + 2; break;
-				case b: hue = ( r - g ) / delta + 4; break;
+                case r: hue = ( g - b ) / delta + ( g < b ? 6 : 0 ); break;
+                case g: hue = ( b - r ) / delta + 2; break;
+                case b: hue = ( r - g ) / delta + 4; break;
 
-			}
+            }
 
-			hue /= 6;
+            hue /= 6;
 
-		}
+        }
 
-		hsl.h = hue;
-		hsl.s = saturation;
-		hsl.l = lightness;
+        hsl.h = hue;
+        hsl.s = saturation;
+        hsl.l = lightness;
 
-		return hsl;
+        return hsl;
 
-	},
+    },
 
-	getStyle: function () {
+    getStyle: function () {
 
-		return 'rgb(' + ( ( this.r * 255 ) | 0 ) + ',' + ( ( this.g * 255 ) | 0 ) + ',' + ( ( this.b * 255 ) | 0 ) + ')';
+        return 'rgb(' + ( ( this.r * 255 ) | 0 ) + ',' + ( ( this.g * 255 ) | 0 ) + ',' + ( ( this.b * 255 ) | 0 ) + ')';
 
-	},
+    },
 
-	offsetHSL: function ( h, s, l ) {
+    offsetHSL: function ( h, s, l ) {
 
-		var hsl = this.getHSL();
+        var hsl = this.getHSL();
 
-		hsl.h += h; hsl.s += s; hsl.l += l;
+        hsl.h += h; hsl.s += s; hsl.l += l;
 
-		this.setHSL( hsl.h, hsl.s, hsl.l );
+        this.setHSL( hsl.h, hsl.s, hsl.l );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	add: function ( color ) {
+    add: function ( color ) {
 
-		this.r += color.r;
-		this.g += color.g;
-		this.b += color.b;
+        this.r += color.r;
+        this.g += color.g;
+        this.b += color.b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	addColors: function ( color1, color2 ) {
+    addColors: function ( color1, color2 ) {
 
-		this.r = color1.r + color2.r;
-		this.g = color1.g + color2.g;
-		this.b = color1.b + color2.b;
+        this.r = color1.r + color2.r;
+        this.g = color1.g + color2.g;
+        this.b = color1.b + color2.b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	addScalar: function ( s ) {
+    addScalar: function ( s ) {
 
-		this.r += s;
-		this.g += s;
-		this.b += s;
+        this.r += s;
+        this.g += s;
+        this.b += s;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	multiply: function ( color ) {
+    multiply: function ( color ) {
 
-		this.r *= color.r;
-		this.g *= color.g;
-		this.b *= color.b;
+        this.r *= color.r;
+        this.g *= color.g;
+        this.b *= color.b;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	multiplyScalar: function ( s ) {
+    multiplyScalar: function ( s ) {
 
-		this.r *= s;
-		this.g *= s;
-		this.b *= s;
+        this.r *= s;
+        this.g *= s;
+        this.b *= s;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	lerp: function ( color, alpha ) {
+    lerp: function ( color, alpha ) {
 
-		this.r += ( color.r - this.r ) * alpha;
-		this.g += ( color.g - this.g ) * alpha;
-		this.b += ( color.b - this.b ) * alpha;
+        this.r += ( color.r - this.r ) * alpha;
+        this.g += ( color.g - this.g ) * alpha;
+        this.b += ( color.b - this.b ) * alpha;
 
-		return this;
+        return this;
 
-	},
+    },
 
-	equals: function ( c ) {
+    equals: function ( c ) {
 
-		return ( c.r === this.r ) && ( c.g === this.g ) && ( c.b === this.b );
+        return ( c.r === this.r ) && ( c.g === this.g ) && ( c.b === this.b );
 
-	},
+    },
 
-	fromArray: function ( array ) {
+    fromArray: function ( array ) {
 
-		this.r = array[ 0 ];
-		this.g = array[ 1 ];
-		this.b = array[ 2 ];
+        this.r = array[ 0 ];
+        this.g = array[ 1 ];
+        this.b = array[ 2 ];
 
-		return this;
+        return this;
 
-	},
+    },
 
-	toArray: function ( array, offset ) {
+    toArray: function ( array, offset ) {
 
-		if ( array === undefined ) array = [];
-		if ( offset === undefined ) offset = 0;
+        if ( array === undefined ) array = [];
+        if ( offset === undefined ) offset = 0;
 
-		array[ offset ] = this.r;
-		array[ offset + 1 ] = this.g;
-		array[ offset + 2 ] = this.b;
+        array[ offset ] = this.r;
+        array[ offset + 1 ] = this.g;
+        array[ offset + 2 ] = this.b;
 
-		return array;
-	},
+        return array;
+    },
 
-	clone: function () {
+    clone: function () {
 
-		return new THREE.Color().setRGB( this.r, this.g, this.b );
+        return new THREE.Color().setRGB( this.r, this.g, this.b );
 
-	}
+    }
 
 };
 

@@ -4,123 +4,123 @@
 
 THREE.Line3 = function ( start, end ) {
 
-	this.start = ( start !== undefined ) ? start : new THREE.Vector3();
-	this.end = ( end !== undefined ) ? end : new THREE.Vector3();
+    this.start = ( start !== undefined ) ? start : new THREE.Vector3();
+    this.end = ( end !== undefined ) ? end : new THREE.Vector3();
 
 };
 
 THREE.Line3.prototype = {
 
-	constructor: THREE.Line3,
+    constructor: THREE.Line3,
 
-	set: function ( start, end ) {
+    set: function ( start, end ) {
 
-		this.start.copy( start );
-		this.end.copy( end );
+        this.start.copy( start );
+        this.end.copy( end );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	copy: function ( line ) {
+    copy: function ( line ) {
 
-		this.start.copy( line.start );
-		this.end.copy( line.end );
+        this.start.copy( line.start );
+        this.end.copy( line.end );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	center: function ( optionalTarget ) {
+    center: function ( optionalTarget ) {
 
-		var result = optionalTarget || new THREE.Vector3();
-		return result.addVectors( this.start, this.end ).multiplyScalar( 0.5 );
+        var result = optionalTarget || new THREE.Vector3();
+        return result.addVectors( this.start, this.end ).multiplyScalar( 0.5 );
 
-	},
+    },
 
-	delta: function ( optionalTarget ) {
+    delta: function ( optionalTarget ) {
 
-		var result = optionalTarget || new THREE.Vector3();
-		return result.subVectors( this.end, this.start );
+        var result = optionalTarget || new THREE.Vector3();
+        return result.subVectors( this.end, this.start );
 
-	},
+    },
 
-	distanceSq: function () {
+    distanceSq: function () {
 
-		return this.start.distanceToSquared( this.end );
+        return this.start.distanceToSquared( this.end );
 
-	},
+    },
 
-	distance: function () {
+    distance: function () {
 
-		return this.start.distanceTo( this.end );
+        return this.start.distanceTo( this.end );
 
-	},
+    },
 
-	at: function ( t, optionalTarget ) {
+    at: function ( t, optionalTarget ) {
 
-		var result = optionalTarget || new THREE.Vector3();
+        var result = optionalTarget || new THREE.Vector3();
 
-		return this.delta( result ).multiplyScalar( t ).add( this.start );
+        return this.delta( result ).multiplyScalar( t ).add( this.start );
 
-	},
+    },
 
-	closestPointToPointParameter: function () {
+    closestPointToPointParameter: function () {
 
-		var startP = new THREE.Vector3();
-		var startEnd = new THREE.Vector3();
+        var startP = new THREE.Vector3();
+        var startEnd = new THREE.Vector3();
 
-		return function ( point, clampToLine ) {
+        return function ( point, clampToLine ) {
 
-			startP.subVectors( point, this.start );
-			startEnd.subVectors( this.end, this.start );
+            startP.subVectors( point, this.start );
+            startEnd.subVectors( this.end, this.start );
 
-			var startEnd2 = startEnd.dot( startEnd );
-			var startEnd_startP = startEnd.dot( startP );
+            var startEnd2 = startEnd.dot( startEnd );
+            var startEnd_startP = startEnd.dot( startP );
 
-			var t = startEnd_startP / startEnd2;
+            var t = startEnd_startP / startEnd2;
 
-			if ( clampToLine ) {
+            if ( clampToLine ) {
 
-				t = THREE.Math.clamp( t, 0, 1 );
+                t = THREE.Math.clamp( t, 0, 1 );
 
-			}
+            }
 
-			return t;
+            return t;
 
-		};
+        };
 
-	}(),
+    }(),
 
-	closestPointToPoint: function ( point, clampToLine, optionalTarget ) {
+    closestPointToPoint: function ( point, clampToLine, optionalTarget ) {
 
-		var t = this.closestPointToPointParameter( point, clampToLine );
+        var t = this.closestPointToPointParameter( point, clampToLine );
 
-		var result = optionalTarget || new THREE.Vector3();
+        var result = optionalTarget || new THREE.Vector3();
 
-		return this.delta( result ).multiplyScalar( t ).add( this.start );
+        return this.delta( result ).multiplyScalar( t ).add( this.start );
 
-	},
+    },
 
-	applyMatrix4: function ( matrix ) {
+    applyMatrix4: function ( matrix ) {
 
-		this.start.applyMatrix4( matrix );
-		this.end.applyMatrix4( matrix );
+        this.start.applyMatrix4( matrix );
+        this.end.applyMatrix4( matrix );
 
-		return this;
+        return this;
 
-	},
+    },
 
-	equals: function ( line ) {
+    equals: function ( line ) {
 
-		return line.start.equals( this.start ) && line.end.equals( this.end );
+        return line.start.equals( this.start ) && line.end.equals( this.end );
 
-	},
+    },
 
-	clone: function () {
+    clone: function () {
 
-		return new THREE.Line3().copy( this );
+        return new THREE.Line3().copy( this );
 
-	}
+    }
 
 };
