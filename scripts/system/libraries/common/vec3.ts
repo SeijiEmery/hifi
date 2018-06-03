@@ -124,7 +124,7 @@ export class Vec3 implements NativeVec3 {
     }
     multiply (other: number | Quat | Vec3) : Vec3 {
         if (typeof(other) === 'number') { return this.scale(<number>other); }
-        else if (other instanceof Quat) { return (<Quat>other).multiply(this); }
+        else if (other instanceof Quat) { assert(false, "TBD"); return Vec3.ZERO; }//return (<Quat>other).multiply(this); }
         else if (other instanceof Vec3) { return this.multiplyVector(<Vec3>other); }
         else { throw new TypeError("Expected number | Quat | Vec3, not "+typeof(other)); }
     }
